@@ -1,0 +1,16 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* 原本寫在 layouts/app.blade.php <style> 裡的自訂 CSS 建議搬來這裡 */
+[x-cloak] {
+    display: none !important;
+}
+
+.nav-link {
+    @apply text-gray-600 hover:text-blue-600 font-medium transition;
+}
+
+.nav-link.active {
+    @apply text-blue-600 font-bold;
+}
