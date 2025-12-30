@@ -6,9 +6,9 @@ namespace App\Models;
 use Filament\Models\Contracts\FilamentUser;
 use Filament\Panel;
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Laravel\Sanctum\HasApiTokens;
 
 class User extends Authenticatable implements FilamentUser
@@ -24,6 +24,9 @@ class User extends Authenticatable implements FilamentUser
         'name',
         'email',
         'password',
+        'role',    // 新增
+        'phone',   // 新增
+        'address', // 新增
     ];
 
     /**
@@ -45,14 +48,28 @@ class User extends Authenticatable implements FilamentUser
         'email_verified_at' => 'datetime',
         'password' => 'hashed',
     ];
-    
-    // 3. 新增這個方法，用來定義誰可以進入後台
+
+    // 關鍵方法：定義誰能進後台
     public function canAccessPanel(Panel $panel): bool
     {
-        // 簡單做法：允許所有擁有帳號的人登入
-        return true; 
-        
-        // 進階做法 (如果您只想讓特定 Email 登入)：
-        // return str_ends_with($this->email, '@yourdomain.com') && $this->hasVerifiedEmail();
+        // 只有 role 是 'admin' 且驗證過 Email (選填) 的人可以進後台
+        // 這裡簡單判斷 role 即可
+        return $this->role === 'admin';
+    }
+
+    public function cart()
+    {
+        return $this->hasOne(Cart::class);
+    }
+
+    public function orders()
+    {
+        return $this->hasMany(Order::class);
+    }
+
+    // User 有很多收藏的商品
+    public function wishlists()
+    {
+        return $this->belongsToMany(Product::class, 'wishlists', 'user_id', 'product_id')->withTimestamps();
     }
 }

@@ -8,6 +8,7 @@
         "php": "^8.2",
         "doctrine/dbal": "^3.0",
         "filament/filament": "^3.2",
+        "flowframe/laravel-trend": "^0.4.0",
         "guzzlehttp/guzzle": "^7.2",
         "inertiajs/inertia-laravel": "^2.0",
         "laravel/framework": "^11.0",

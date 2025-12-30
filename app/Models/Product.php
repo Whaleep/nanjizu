@@ -35,4 +35,21 @@ class Product extends Model
     {
         return $this->productTags();
     }
+
+    public function reviews(): HasMany
+    {
+        return $this->hasMany(Review::class)->where('is_visible', true);
+    }
+
+    // 取得平均評分 (Attribute)
+    public function getAverageRatingAttribute()
+    {
+        return round($this->reviews()->avg('rating') ?? 0, 1); // 取一位小數
+    }
+
+    // 取得評價總數
+    public function getReviewCountAttribute()
+    {
+        return $this->reviews()->count();
+    }
 }

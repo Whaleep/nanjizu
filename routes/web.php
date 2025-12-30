@@ -1,13 +1,14 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\HomeController;
-use App\Http\Controllers\PostController;
-use App\Http\Controllers\RepairController;
-use App\Http\Controllers\ShopController;
-use App\Http\Controllers\CartController;
-use App\Http\Controllers\CheckoutController;
+use App\Http\Controllers\V1;
+use App\Http\Controllers\V2;
+use App\Http\Controllers\PageController;
 use App\Http\Controllers\PaymentController;
+use App\Http\Controllers\AuthController;
+use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\WishlistController;
+use App\Http\Controllers\ReviewController;
 use App\Models\Post;
 use App\Models\Store;
 use Illuminate\Support\Facades\Log;
@@ -29,10 +30,8 @@ use Inertia\Inertia;
 | V2 Routes (Inertia.js / Vue) - 新版前台
 |--------------------------------------------------------------------------
 */
-// 測試路由 (稍後可刪)
-Route::get('/v2-test', function () {
-    return Inertia::render('Test', ['message' => 'V2 is running!']);
-});
+
+Route::get('/', [V2\HomeController::class, 'index'])->name('home');
 
 // 服務據點 (需要撈資料)
 Route::get('/stores', function () {
@@ -50,23 +49,65 @@ Route::get('/about', function () {
     return Inertia::render('Pages/About');
 })->name('about');
 
-Route::get('/news', [PostController::class, 'newsV2'])->name('news.index');
-Route::get('/cases', [PostController::class, 'casesV2'])->name('cases.index');
-Route::get('/posts/{slug}', [PostController::class, 'showV2'])->name('posts.show');
+Route::get('/news', [V2\PostController::class, 'news'])->name('news.index');
+Route::get('/cases', [V2\PostController::class, 'cases'])->name('cases.index');
+Route::get('/posts/{slug}', [V2\PostController::class, 'show'])->name('posts.show');
 
-Route::get('/', [HomeController::class, 'indexV2'])->name('home'); // 首頁接管
-Route::get('/repair', [RepairController::class, 'indexV2'])->name('repair.index'); // 維修列表接管
-Route::get('/repair/{id}', [RepairController::class, 'showV2'])->name('repair.show'); // 維修詳情接管
+Route::get('/repair', [V2\RepairController::class, 'index'])->name('repair.index');
+Route::get('/repair/{id}', [V2\RepairController::class, 'show'])->name('repair.show');
+// 注意：前端 Vue 的 Form 如果 action 改打這裡，要記得改路由名稱或路徑
+Route::post('/repair/inquiry', [V2\RepairController::class, 'store'])->name('repair.inquiry');
 
-// V2 商店首頁 (接管 /shop)
-// 注意：我們沿用原本的 ShopController，但會修改裡面的方法來判斷回傳 Inertia
-Route::get('/shop', [ShopController::class, 'indexV2'])->name('shop.index');
-Route::get('/shop/category/{slug}', [ShopController::class, 'categoryV2'])->name('shop.category');
-Route::get('/shop/product/{slug}', [ShopController::class, 'productV2'])->name('shop.product');
+// 商店首頁
+Route::get('/shop', [V2\ShopController::class, 'index'])->name('shop.index');
+Route::get('/shop/category/{slug}', [V2\ShopController::class, 'category'])->name('shop.category');
+Route::get('/shop/product/{slug}', [V2\ShopController::class, 'product'])->name('shop.product');
 
-Route::get('/cart', [CartController::class, 'indexV2'])->name('cart.index');
-Route::get('/checkout', [CheckoutController::class, 'indexV2'])->name('checkout.index');
-Route::get('/checkout/success/{id}', [CheckoutController::class, 'successV2'])->name('checkout.success');
+// 購物車頁面
+Route::get('/cart', [V2\CartController::class, 'index'])->name('cart.index');
+// 購物車 APIs (Vue Axios 呼叫這些)
+Route::get('/cart/count', [V2\CartController::class, 'count'])->name('cart.count');
+Route::post('/cart/add', [V2\CartController::class, 'add'])->name('cart.add');
+Route::post('/cart/update', [V2\CartController::class, 'update'])->name('cart.update');
+Route::post('/cart/remove', [V2\CartController::class, 'remove'])->name('cart.remove');
+Route::post('/cart/coupon', [V2\CartController::class, 'applyCoupon'])->name('cart.coupon.apply');
+Route::delete('/cart/coupon', [V2\CartController::class, 'removeCoupon'])->name('cart.coupon.remove');
+
+// Route::get('/checkout', [CheckoutController::class, 'indexV2'])->name('checkout.index');
+// Route::get('/checkout/success/{id}', [CheckoutController::class, 'successV2'])->name('checkout.success');
+Route::get('/checkout', [V2\CheckoutController::class, 'index'])->name('checkout.index');
+Route::post('/checkout', [V2\CheckoutController::class, 'store'])->name('checkout.store');
+Route::get('/checkout/success/{id}', [V2\CheckoutController::class, 'success'])->name('checkout.success');
+
+// Auth Routes (只給未登入者)
+Route::middleware('guest')->group(function () {
+    Route::get('/login', [AuthController::class, 'login'])->name('login');
+    Route::post('/login', [AuthController::class, 'store']);
+    Route::get('/register', [AuthController::class, 'register'])->name('register');
+    Route::post('/register', [AuthController::class, 'create']);
+});
+
+// 會員專區 (需登入)
+Route::middleware(['auth'])->prefix('dashboard')->name('dashboard.')->group(function () {
+    Route::get('/', [DashboardController::class, 'index'])->name('index');
+    Route::get('/orders', [DashboardController::class, 'orders'])->name('orders');
+    Route::get('/orders/{orderNumber}', [DashboardController::class, 'orderDetail'])->name('orders.show');
+    Route::get('/profile', [DashboardController::class, 'profile'])->name('profile');
+    Route::post('/profile', [DashboardController::class, 'updateProfile'])->name('profile.update');
+    Route::get('/wishlist', [WishlistController::class, 'index'])->name('wishlist');
+});
+
+Route::middleware(['auth'])->group(function () {
+    Route::post('/reviews', [ReviewController::class, 'store'])->name('reviews.store');
+});
+
+
+// 切換收藏 (API)
+Route::post('/wishlist/toggle', [WishlistController::class, 'toggle'])->name('wishlist.toggle')->middleware('auth');
+
+// Logout (需登入)
+Route::post('/logout', [AuthController::class, 'logout'])->name('logout')->middleware('auth');
+
 
 /*
 |--------------------------------------------------------------------------
@@ -77,7 +118,8 @@ Route::get('/checkout/success/{id}', [CheckoutController::class, 'successV2'])->
 Route::prefix('v1')->name('v1.')->group(function () {
 
     // 首頁
-    Route::get('/', [HomeController::class, 'index'])->name('home');
+    Route::get('/', [V1\HomeController::class, 'index'])->name('home');
+    Route::get('/second-hand', [V1\HomeController::class, 'secondHand'])->name('second-hand.index');
     Route::get('/about', function () {
         return view('pages.about');
     })->name('about');
@@ -85,23 +127,17 @@ Route::prefix('v1')->name('v1.')->group(function () {
     // 簡單展示分店列表
 
     // 簡單展示文章
-    Route::get('/news/{slug}', function ($slug) {
-        $post = Post::where('slug', $slug)->where('is_published', true)->firstOrFail();
-        return view('posts.show', compact('post'));
-    })->name('posts.show');
-
-    // 文章相關路由
-    Route::get('/news', [PostController::class, 'news'])->name('news.index');
-    Route::get('/cases', [PostController::class, 'cases'])->name('cases.index');
-    Route::get('/posts/{slug}', [PostController::class, 'show'])->name('posts.show');
+    Route::get('/news', [V1\PostController::class, 'news'])->name('news.index');
+    Route::get('/cases', [V1\PostController::class, 'cases'])->name('cases.index');
+    Route::get('/posts/{slug}', [V1\PostController::class, 'show'])->name('posts.show');
 
     // 報價與預約路由
-    Route::get('/repair', [RepairController::class, 'index'])->name('repair.index');
-    Route::get('/repair/{id}', [RepairController::class, 'show'])->name('repair.show');
-    Route::post('/inquiry', [RepairController::class, 'storeInquiry'])->name('inquiry.store');
+    Route::get('/repair', [V1\RepairController::class, 'index'])->name('repair.index');
+    Route::get('/repair/{id}', [V1\RepairController::class, 'show'])->name('repair.show');
+    Route::post('/inquiry', [V1\RepairController::class, 'storeInquiry'])->name('inquiry.store');
 
     // 靜態與分店列表
-    Route::get('/second-hand', [App\Http\Controllers\HomeController::class, 'secondHand'])->name('second-hand.index');
+    Route::get('/second-hand', [V1\HomeController::class, 'secondHand'])->name('second-hand.index');
     Route::get('/process', function () {
         return view('pages.process');
     })->name('process');
@@ -111,20 +147,20 @@ Route::prefix('v1')->name('v1.')->group(function () {
     })->name('stores.index');
 
     // 商店路由
-    Route::get('/shop', [ShopController::class, 'index'])->name('shop.index');
-    Route::get('/shop/category/{slug}', [ShopController::class, 'category'])->name('shop.category');
-    Route::get('/shop/product/{slug}', [ShopController::class, 'product'])->name('shop.product');
+    Route::get('/shop', [V1\ShopController::class, 'index'])->name('shop.index');
+    Route::get('/shop/category/{slug}', [V1\ShopController::class, 'category'])->name('shop.category');
+    Route::get('/shop/product/{slug}', [V1\ShopController::class, 'product'])->name('shop.product');
 
     // 購物車路由
-    Route::get('/cart', [CartController::class, 'index'])->name('cart.index');
-    Route::post('/cart/add', [CartController::class, 'add'])->name('cart.add');
-    Route::post('/cart/update', [CartController::class, 'update'])->name('cart.update');
-    Route::post('/cart/remove', [CartController::class, 'remove'])->name('cart.remove');
+    Route::get('/cart', [V1\CartController::class, 'index'])->name('cart.index');
+    Route::post('/cart/add', [V1\CartController::class, 'add'])->name('cart.add');
+    Route::post('/cart/update', [V1\CartController::class, 'update'])->name('cart.update');
+    Route::post('/cart/remove', [V1\CartController::class, 'remove'])->name('cart.remove');
 
     // 結帳路由
-    Route::get('/checkout', [CheckoutController::class, 'index'])->name('checkout.index');
-    Route::post('/checkout', [CheckoutController::class, 'store'])->name('checkout.store');
-    Route::get('/checkout/success/{id}', [CheckoutController::class, 'success'])->name('checkout.success');
+    Route::get('/checkout', [V1\CheckoutController::class, 'index'])->name('checkout.index');
+    Route::post('/checkout', [V1\CheckoutController::class, 'store'])->name('checkout.store');
+    Route::get('/checkout/success/{id}', [V1\CheckoutController::class, 'success'])->name('checkout.success');
 });
 
 // 共用 API 不分版本
@@ -150,7 +186,7 @@ Route::post('/payment/callback', [PaymentController::class, 'callback'])->name('
 //                     'messages' => [
 //                         [
 //                             'type' => 'text',
-//                             'text' => "您的 User ID 是：\n" . $userId . "\n\n請將此 ID 複製到 .env 的 LINE_ADMIN_USER_ID 欄位中。"
+//                             'text' => "您的 User ID 是：\n" . $userId . \\ "\n\n請將此 ID 複製到 .env 的 LINE_ADMIN_USER_ID 欄位中。"
 //                         ]
 //                     ]
 //                 ]);
@@ -159,3 +195,5 @@ Route::post('/payment/callback', [PaymentController::class, 'callback'])->name('
 
 //     return response('OK', 200);
 // });
+
+Route::get('/{slug}', [PageController::class, 'showV2'])->name('page.show');

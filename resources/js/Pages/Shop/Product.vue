@@ -1,60 +1,162 @@
 <script setup>
 import { ref, computed } from 'vue';
-import { Head, Link } from '@inertiajs/vue3';
+import { Head, Link, useForm, usePage } from '@inertiajs/vue3';
 import ShopLayout from '@/Layouts/ShopLayout.vue';
-import axios from 'axios'; // 用 axios 做 AJAX 加入購物車
+import axios from 'axios';
 
 const props = defineProps({
     product: Object,
+    relatedProducts: Array,
+    isWishlisted: Boolean,
+    canReview: Boolean,
+    reviewStatus: String,
 });
 
-// 狀態管理
+// 狀態
+const page = usePage();
 const selectedVariant = ref(props.product.variants[0] || {});
+const isWishlisted = ref(props.isWishlisted);
 const quantity = ref(1);
 const isLoading = ref(false);
+const showToast = ref(false);
 
-// 計算屬性
+const formatPrice = (price) => new Intl.NumberFormat('zh-TW').format(price);
+
 const priceRange = computed(() => {
     const prices = props.product.variants.map(v => v.price);
     const min = Math.min(...prices);
     const max = Math.max(...prices);
-    return min === max ? `NT$ ${min}` : `NT$ ${min} ~ ${max}`;
+    return min === max ? `NT$ ${formatPrice(min)}` : `NT$ ${formatPrice(min)} ~ ${formatPrice(max)}`;
 });
 
-const formatPrice = (price) => new Intl.NumberFormat('zh-TW').format(price);
+const getMinPrice = (variants) => {
+    if (!variants || variants.length === 0) return 0;
+    return Math.min(...variants.map(v => v.price));
+};
 
-// 加入購物車 (使用 Axios 避免頁面重整)
+// 加入購物車 (優化版)
 const addToCart = async () => {
     if (selectedVariant.value.stock <= 0) return;
 
     isLoading.value = true;
     try {
-        const response = await axios.post('/v1/cart/add', { // 注意：這裡是打 V1 的 API，因為邏輯通用
+        const response = await axios.post('/cart/add', {
             variant_id: selectedVariant.value.id,
             quantity: quantity.value
         });
 
-        // 手動觸發 Inertia 重新載入頁面資料 (為了更新 Navbar 購物車紅點)
-        // 這裡用 { only: ['cartCount'] } 會更高效，但需要後端配合 partial reload
-        // 簡單作法：直接 reload
-        window.location.reload();
-        // 或使用 Inertia.reload({ only: ['cartCount'] }) 如果我們有在 HandleInertiaRequests 設定 lazy loading
+        // 1. 更新 Navbar 紅點 (透過全域事件，不重整頁面)
+        window.dispatchEvent(new CustomEvent('cart-updated', {
+            detail: { count: response.data.cartCount }
+        }));
 
-        alert('已加入購物車！');
+        // 2. 顯示右上角提示
+        showToast.value = true;
+        setTimeout(() => showToast.value = false, 3000);
+
+        // 3. 移除 window.location.reload() <--- 這就是造成閃爍的主因！
+
     } catch (error) {
-        alert('加入失敗');
+        alert('加入失敗: ' + (error.response?.data?.message || '未知錯誤'));
     } finally {
         isLoading.value = false;
+    }
+};
+
+// 切換收藏
+const toggleWishlist = async () => {
+    // 1. 使用 usePage() 獲取全域共享資料
+    const page = usePage();
+    const user = page.props.auth.user;
+
+    // 2. 判斷 user 是否存在
+    if (!user) {
+        if(confirm('收藏商品需要先登入會員，是否前往登入？')) {
+            window.location.href = '/login';
+        }
+        return;
+    }
+
+    // 3. 執行收藏邏輯 (保持不變)
+    try {
+        const response = await axios.post('/wishlist/toggle', { product_id: props.product.id });
+        isWishlisted.value = response.data.is_wishlisted;
+    } catch (error) {
+        console.error(error);
+        alert('操作失敗，請稍後再試');
+    }
+};
+
+// 評價表單
+const reviewForm = useForm({
+    product_id: props.product.id,
+    rating: 5,
+    comment: '',
+});
+
+const submitReview = () => {
+    reviewForm.post('/reviews', {
+        preserveScroll: true,
+        onSuccess: () => {
+            // 關鍵修改：檢查後端是否有回傳 success flash
+            if (page.props.flash.success) {
+                reviewForm.reset('comment');
+                alert(page.props.flash.success);
+            }
+            // 如果是 error flash (例如驗證失敗)，Inertia 雖然視為 onSuccess，但我們不彈出成功
+            else if (page.props.flash.error) {
+                alert(page.props.flash.error);
+            }
+        },
+        onError: (errors) => {
+            alert('提交失敗：' + Object.values(errors).join('\n'));
+        }
+    });
+};
+
+// 準備 Schema.org 資料
+const schemaData = {
+    "@context": "https://schema.org/",
+    "@type": "Product",
+    "name": props.product.name,
+    "image": props.product.image ? `${window.location.origin}/storage/${props.product.image}` : '',
+    "description": props.product.description ? props.product.description.replace(/<[^>]*>?/gm, '') : '', // 去除 HTML 標籤
+    "sku": selectedVariant.value.sku || props.product.id,
+    "offers": {
+        "@type": "Offer",
+        "url": window.location.href,
+        "priceCurrency": "TWD",
+        "price": selectedVariant.value.price,
+        "availability": selectedVariant.value.stock > 0 ? "https://schema.org/InStock" : "https://schema.org/OutOfStock"
     }
 };
 </script>
 
 <template>
-    <Head :title="product.name" />
+    <Head :title="product.name">
+        <!-- 插入 JSON-LD -->
+        <component :is="'script'" type="application/ld+json">
+            {{ JSON.stringify(schemaData) }}
+        </component>
+    </Head>
 
     <ShopLayout>
+        <transition
+            enter-active-class="transition ease-out duration-300"
+            enter-from-class="transform opacity-0 translate-y-2"
+            enter-to-class="transform opacity-100 translate-y-0"
+            leave-active-class="transition ease-in duration-200"
+            leave-from-class="transform opacity-100 translate-y-0"
+            leave-to-class="transform opacity-0 translate-y-2"
+        >
+            <div v-if="showToast" class="fixed top-20 right-4 z-50 bg-green-600 text-white px-6 py-3 rounded-lg shadow-xl flex items-center gap-2">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                <span>已加入購物車！</span>
+            </div>
+        </transition>
+
         <div class="grid grid-cols-1 md:grid-cols-2 gap-10">
-            <!-- 圖片 -->
+            <!-- 左側圖片 -->
             <div class="bg-gray-100 rounded-2xl overflow-hidden border aspect-square flex items-center justify-center">
                 <img v-if="product.image" :src="`/storage/${product.image}`" class="w-full h-full object-cover">
                 <span v-else class="text-gray-400">No Image</span>
@@ -68,10 +170,30 @@ const addToCart = async () => {
                 </nav>
 
                 <h1 class="text-3xl font-bold mb-2">{{ product.name }}</h1>
+                <div class="flex items-center gap-2 mb-4">
+                    <div class="flex text-yellow-400">
+                        <template v-for="i in 5" :key="i">
+                            <!-- 實心星星 / 空心星星 簡單判斷 -->
+                            <svg v-if="i <= Math.round(product.average_rating)" class="w-5 h-5 fill-current" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg>
+                            <svg v-else class="w-5 h-5 text-gray-300 fill-current" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg>
+                        </template>
+                    </div>
+                    <span class="text-sm text-gray-500">({{ product.review_count }} 則評價)</span>
+                </div>
                 <p class="text-gray-500 text-sm mb-4">全系列價格：{{ priceRange }}</p>
 
-                <div class="text-3xl text-red-600 font-bold mb-6">
-                    NT$ {{ formatPrice(selectedVariant.price) }}
+                <div class="mb-6">
+                    <div class="text-3xl text-red-600 font-bold mb-2">
+                        NT$ {{ formatPrice(selectedVariant.price) }}
+                    </div>
+
+                    <!-- 庫存顯示 -->
+                    <div class="text-sm">
+                        <span class="text-gray-500">庫存狀態：</span>
+                        <span v-if="selectedVariant.stock > 10" class="text-green-600 font-bold">庫存充足</span>
+                        <span v-else-if="selectedVariant.stock > 0" class="text-orange-500 font-bold">最後 {{ selectedVariant.stock }} 件</span>
+                        <span v-else class="text-red-500 font-bold">已售完</span>
+                    </div>
                 </div>
 
                 <!-- 規格按鈕 -->
@@ -94,13 +216,124 @@ const addToCart = async () => {
                     <input type="number" v-model="quantity" min="1" :max="selectedVariant.stock" class="w-32 border rounded-lg px-4 py-3 text-center font-bold">
                     <button @click="addToCart"
                             :disabled="selectedVariant.stock <= 0 || isLoading"
-                            class="flex-1 bg-blue-600 text-white font-bold py-3 rounded-lg hover:bg-blue-700 disabled:bg-gray-400 transition">
-                        {{ isLoading ? '處理中...' : (selectedVariant.stock > 0 ? '加入購物車' : '暫無庫存') }}
+                            class="flex-1 bg-blue-600 text-white font-bold py-3 rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition shadow-lg flex items-center justify-center gap-2">
+                        <svg v-if="isLoading" class="animate-spin h-5 w-5" viewBox="0 0 24 24"><!-- Spinner SVG --></svg>
+                        {{ isLoading ? '處理中...' : (selectedVariant.stock > 0 ? '加入購物車' : '補貨中') }}
+                    </button>
+                    <button @click="toggleWishlist"
+                class="w-12 h-[50px] border rounded-lg flex items-center justify-center transition hover:border-red-400"
+                :class="isWishlisted ? 'border-red-500 bg-red-50 text-red-500' : 'border-gray-300 text-gray-400'">
+                        <!-- 實心愛心 (已收藏) / 空心愛心 (未收藏) -->
+                        <svg v-if="isWishlisted" class="w-6 h-6 fill-current" viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+                        <svg v-else class="w-6 h-6 fill-none stroke-current stroke-2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"></path></svg>
                     </button>
                 </div>
 
                 <div class="mt-10 border-t pt-8 prose text-gray-600" v-html="product.description"></div>
             </div>
         </div>
+
+        <!-- === 評價區塊 === -->
+        <div class="mt-16 border-t pt-10">
+            <h2 class="text-2xl font-bold mb-8">商品評價</h2>
+
+            <!-- 1. 評價列表 -->
+            <div v-if="product.reviews.length > 0" class="space-y-6 mb-12">
+                <div v-for="review in product.reviews" :key="review.id" class="bg-gray-50 p-6 rounded-lg">
+                    <div class="flex items-center justify-between mb-2">
+                        <div class="font-bold text-gray-800">{{ review.user.name }}</div>
+                        <div class="text-sm text-gray-500">{{ new Date(review.created_at).toLocaleDateString() }}</div>
+                    </div>
+                    <div class="flex text-yellow-400 mb-3">
+                        <template v-for="i in 5">
+                            <span v-if="i <= review.rating">★</span>
+                            <span v-else class="text-gray-300">★</span>
+                        </template>
+                    </div>
+                    <p class="text-gray-700">{{ review.comment }}</p>
+                </div>
+            </div>
+            <div v-else class="text-gray-500 italic mb-10">目前尚無評價，歡迎分享您的使用心得！</div>
+
+            <!-- 2. 撰寫評價表單 (只有符合資格者顯示) -->
+            <div v-if="canReview" class="bg-white border rounded-xl p-6 shadow-sm max-w-2xl">
+                <h3 class="text-lg font-bold mb-4">撰寫評價</h3>
+                <form @submit.prevent="submitReview">
+                    <!-- ... 表單內容保持不變 ... -->
+
+                    <div class="mb-4">
+                        <label class="block text-sm font-bold text-gray-700 mb-2">整體評分</label>
+                        <div class="flex gap-2">
+                            <button type="button" v-for="i in 5" :key="i"
+                                    @click="reviewForm.rating = i"
+                                    class="text-2xl focus:outline-none transition transform hover:scale-110"
+                                    :class="i <= reviewForm.rating ? 'text-yellow-400' : 'text-gray-300'">
+                                ★
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="mb-4">
+                        <label class="block text-sm font-bold text-gray-700 mb-2">心得分享</label>
+                        <textarea v-model="reviewForm.comment" rows="4"
+                                  class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none"
+                                  placeholder="說說看這個商品哪裡好用..."></textarea>
+                    </div>
+
+                    <button type="submit" :disabled="reviewForm.processing"
+                            class="bg-blue-600 text-white px-6 py-2 rounded-lg font-bold hover:bg-blue-700 transition disabled:opacity-50">
+                        {{ reviewForm.processing ? '提交中...' : '送出評價' }}
+                    </button>
+                </form>
+            </div>
+
+            <!-- 狀態提示區 -->
+            <div v-else class="text-sm p-4 rounded-lg inline-block">
+                <!-- 狀態 A: 已經評過了 -->
+                <div v-if="reviewStatus === 'reviewed'" class="text-green-600 bg-green-50 border border-green-200">
+                    ✅ 您已評價過此商品，感謝您的回饋！
+                </div>
+
+                <!-- 狀態 B: 登入但沒買過 (或訂單未完成) -->
+                <div v-else-if="reviewStatus === 'no-purchase'" class="text-gray-500 bg-gray-100 border border-gray-200">
+                    💡 只有購買過此商品且訂單已完成的會員才能撰寫評價喔。
+                </div>
+
+                <!-- 狀態 C: 未登入 -->
+                <div v-else-if="reviewStatus === 'guest'" class="text-gray-500 bg-gray-100 border border-gray-200">
+                    💡 請先 <Link href="/login" class="text-blue-600 hover:underline">登入</Link> 以撰寫評價。
+                </div>
+            </div>
+        </div>
+
+        <!-- 關聯商品區塊 -->
+        <div v-if="relatedProducts.length > 0" class="mt-16 border-t pt-10">
+            <h2 class="text-2xl font-bold mb-6 text-gray-800">您可能也喜歡</h2>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6">
+                <div v-for="related in relatedProducts" :key="related.id"
+                     class="bg-white border rounded-xl overflow-hidden hover:shadow-lg transition group">
+
+                    <Link :href="`/shop/product/${related.slug}`" class="block aspect-square bg-gray-100 overflow-hidden relative">
+                        <img v-if="related.image" :src="`/storage/${related.image}`"
+                             class="w-full h-full object-cover group-hover:scale-105 transition duration-500">
+                        <div v-else class="flex items-center justify-center w-full h-full text-gray-400">無圖</div>
+                    </Link>
+
+                    <div class="p-4">
+                        <div class="text-xs text-gray-500 mb-1" v-if="related.category">
+                            {{ related.category.name }}
+                        </div>
+                        <h3 class="font-bold text-base mb-2 group-hover:text-blue-600 line-clamp-2">
+                            <Link :href="`/shop/product/${related.slug}`">{{ related.name }}</Link>
+                        </h3>
+                        <p class="text-red-600 font-bold">
+                            NT$ {{ formatPrice(getMinPrice(related.variants)) }} 起
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
     </ShopLayout>
 </template>

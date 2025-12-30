@@ -1,0 +1,83 @@
+name: Deploy to Hostinger
+
+on:
+  push:
+    branches:
+      - main  # 只有推送到 main 分支時才觸發 (請確認您的分支名稱是 main 還是 master)
+
+jobs:
+  web-deploy:
+    name: 🎉 Deploy
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. 取得程式碼
+      - name: 🚚 Get latest code
+        uses: actions/checkout@v4
+
+      # 2. 設定 PHP 環境 (為了跑 Composer)
+      - name: 🐘 Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2' # 請確認 Hostinger 上的 PHP 版本
+          extensions: mbstring, intl, pdo, pdo_mysql
+
+      # 3. 安裝 Composer 套件 (不含開發套件)
+      - name: 📦 Install Composer Dependencies
+        run: composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist
+
+      # 4. 設定 Node.js 環境
+      - name: 🟢 Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20'
+
+      # 5. 編譯前端資源 (Vite)
+      - name: ⚡ Build Assets
+        run: |
+          npm install
+          npm run build
+
+      # 6. FTP 同步檔案 (核心步驟)
+      # 這裡會把 build 好的 vendor 和 public/build 全部傳上去
+      - name: 📂 Sync files via FTP
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.4
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          # 要上傳到 Hostinger 的哪個資料夾？
+          # 請根據您的實際路徑修改，通常是 /domains/您的網域/laravel_core
+          server-dir: /domains/sienna-beaver-875544.hostingersite.com/laravel_core/
+
+          # 要排除的檔案 (非常重要！不要覆蓋 .env，不要上傳 node_modules)
+          exclude: |
+            **/.git*
+            **/.git*/**
+            **/node_modules/**
+            .env
+            .env.example
+            storage/*.key
+
+      # 7. 透過 SSH 執行 Laravel 指令 (Migrate & Clear Cache)
+      - name: 🚀 Run Artisan Commands via SSH
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USERNAME }}
+          password: ${{ secrets.SSH_PASSWORD }}
+          port: ${{ secrets.SSH_PORT }}
+          script: |
+            # 進入核心目錄
+            cd domains/sienna-beaver-875544.hostingersite.com/laravel_core
+
+            # 執行遷移 (強制執行，因為是 production)
+            php artisan migrate --force
+
+            # 清除並重建快取
+            php artisan config:clear
+            php artisan view:clear
+            php artisan route:clear
+
+            # 建立 Storage Link (如果掉了的話補連，有的話會略過)
+            php artisan storage:link || true

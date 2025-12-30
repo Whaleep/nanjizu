@@ -17,6 +17,17 @@ const search = ref(props.filters.q || '');
 const handleSearch = () => {
     router.get('/shop', { q: search.value }, { preserveState: true });
 };
+
+// 計算價格範圍
+const getPriceDisplay = (variants) => {
+    if (!variants || variants.length === 0) return 'NT$ 0';
+    const prices = variants.map(v => v.price);
+    const min = Math.min(...prices);
+    const max = Math.max(...prices);
+    return min === max
+        ? `NT$ ${new Intl.NumberFormat('zh-TW').format(min)}`
+        : `NT$ ${new Intl.NumberFormat('zh-TW').format(min)} ~ ${new Intl.NumberFormat('zh-TW').format(max)}`;
+};
 </script>
 
 <template>
@@ -74,7 +85,7 @@ const handleSearch = () => {
                         <h3 class="font-bold text-lg mb-2 group-hover:text-blue-600 line-clamp-2">
                             <Link :href="`/shop/product/${product.slug}`">{{ product.name }}</Link>
                         </h3>
-                        <p class="text-red-600 font-bold">NT$ {{ formatPrice(getMinPrice(product.variants)) }} 起</p>
+                        <p class="text-red-600 font-bold">{{ getPriceDisplay(product.variants) }}</p>
                     </div>
                 </div>
             </div>

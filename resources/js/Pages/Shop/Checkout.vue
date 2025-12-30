@@ -1,19 +1,21 @@
 <script setup>
-import { Head, useForm } from '@inertiajs/vue3';
+import { Head, useForm, usePage } from '@inertiajs/vue3';
 import MainLayout from '@/Layouts/MainLayout.vue';
 
 const props = defineProps({
     cartItems: Array,
     total: Number,
 });
+const page = usePage();
+const user = page.props.auth.user; // 取得登入者
 
 const formatPrice = (price) => new Intl.NumberFormat('zh-TW').format(price);
 
 const form = useForm({
-    customer_name: '',
-    customer_phone: '',
-    customer_email: '',
-    customer_address: '',
+    customer_name: user ? user.name : '',
+    customer_phone: user ? user.phone : '',
+    customer_email: user ? user.email : '',
+    customer_address: user ? user.address : '',
     notes: '',
     payment_method: 'cod', // 預設貨到付款
 });
@@ -43,7 +45,7 @@ const submit = () => {
                         技巧：使用傳統 Form 提交到 /v1/checkout
                         這樣後端回傳綠界 HTML 時，瀏覽器會直接渲染並執行跳轉
                     -->
-                    <form action="/v1/checkout" method="POST" id="real-checkout-form">
+                    <form action="/checkout" method="POST" id="real-checkout-form">
                         <!-- CSRF Token (Laravel Blade 會自動加，Vue 要手動加) -->
                         <input type="hidden" name="_token" :value="$page.props.csrf_token">
 

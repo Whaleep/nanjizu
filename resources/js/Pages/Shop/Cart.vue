@@ -1,12 +1,21 @@
 <script setup>
+import { ref } from 'vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import MainLayout from '@/Layouts/MainLayout.vue';
 import axios from 'axios';
 
 const props = defineProps({
     cartItems: Array,
-    total: Number,
+    subtotal: Number, // 改名：原本的 total 變成 subtotal
+    discount: Number, // 新增
+    total: Number,    // 新增
+    appliedCoupon: String, // 新增
 });
+
+// 本地狀態
+const couponCode = ref('');
+const couponMessage = ref('');
+const isCouponLoading = ref(false);
 
 const formatPrice = (price) => new Intl.NumberFormat('zh-TW').format(price);
 
@@ -14,7 +23,7 @@ const formatPrice = (price) => new Intl.NumberFormat('zh-TW').format(price);
 const updateQuantity = async (variantId, qty) => {
     if (qty < 1) return;
     try {
-        await axios.post('/v1/cart/update', { variant_id: variantId, quantity: qty });
+        await axios.post('/cart/update', { variant_id: variantId, quantity: qty });
         // 重新載入頁面資料 (Inertia 方式)
         router.reload({ only: ['cartItems', 'total', 'cartCount'] });
     } catch (error) {
@@ -26,12 +35,41 @@ const updateQuantity = async (variantId, qty) => {
 const removeItem = async (variantId) => {
     if (!confirm('確定移除?')) return;
     try {
-        await axios.post('/v1/cart/remove', { variant_id: variantId });
+        await axios.post('/cart/remove', { variant_id: variantId });
         router.reload();
     } catch (error) {
         alert('移除失敗');
     }
 };
+
+// 套用優惠券
+const applyCoupon = async () => {
+    if (!couponCode.value) return;
+    isCouponLoading.value = true;
+    couponMessage.value = '';
+
+    try {
+        await axios.post('/cart/coupon', { code: couponCode.value });
+        router.reload({ only: ['subtotal', 'discount', 'total', 'appliedCoupon'] });
+        couponMessage.value = '優惠券套用成功！';
+        couponCode.value = ''; // 清空輸入框
+    } catch (error) {
+        couponMessage.value = error.response?.data?.message || '無效的優惠碼';
+    } finally {
+        isCouponLoading.value = false;
+    }
+};
+
+// 移除優惠券
+const removeCoupon = async () => {
+    try {
+        await axios.delete('/cart/coupon');
+        router.reload({ only: ['subtotal', 'discount', 'total', 'appliedCoupon'] });
+    } catch (error) {
+        console.error(error);
+    }
+};
+
 </script>
 
 <template>
@@ -86,7 +124,40 @@ const removeItem = async (variantId) => {
                 <div class="lg:w-1/3">
                     <div class="bg-white shadow rounded-lg p-6 border sticky top-24">
                         <h3 class="text-lg font-bold mb-4 border-b pb-2">訂單摘要</h3>
-                        <div class="flex justify-between mb-6 text-xl font-bold text-gray-900">
+
+                        <div class="flex justify-between mb-2 text-gray-600">
+                            <span>商品小計</span>
+                            <span>NT$ {{ formatPrice(subtotal) }}</span>
+                        </div>
+
+                        <!-- 折扣顯示 -->
+                        <div v-if="discount > 0" class="flex justify-between mb-2 text-green-600 font-bold">
+                            <span>折扣 ({{ appliedCoupon }})</span>
+                            <span>- NT$ {{ formatPrice(discount) }}</span>
+                        </div>
+
+                        <!-- 優惠券輸入區 -->
+                        <div class="my-4 pt-4 border-t">
+                            <div v-if="!appliedCoupon">
+                                <div class="flex gap-2">
+                                    <input type="text" v-model="couponCode" placeholder="輸入優惠碼"
+                                        class="w-full border rounded px-3 py-2 text-sm uppercase">
+                                    <button @click="applyCoupon" :disabled="isCouponLoading"
+                                            class="bg-gray-800 text-white px-3 py-2 rounded text-sm hover:bg-gray-700 disabled:opacity-50">
+                                        套用
+                                    </button>
+                                </div>
+                                <p v-if="couponMessage" class="text-xs mt-1" :class="couponMessage.includes('成功') ? 'text-green-600' : 'text-red-500'">
+                                    {{ couponMessage }}
+                                </p>
+                            </div>
+                            <div v-else class="flex justify-between items-center bg-green-50 p-2 rounded border border-green-200">
+                                <span class="text-sm text-green-800">已套用：<b>{{ appliedCoupon }}</b></span>
+                                <button @click="removeCoupon" class="text-red-500 text-xs hover:underline">移除</button>
+                            </div>
+                        </div>
+
+                        <div class="flex justify-between mb-6 text-xl font-bold text-gray-900 border-t pt-4">
                             <span>總金額</span>
                             <span class="text-red-600">NT$ {{ formatPrice(total) }}</span>
                         </div>

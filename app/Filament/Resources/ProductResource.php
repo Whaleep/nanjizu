@@ -159,6 +159,16 @@ class ProductResource extends Resource
                 Tables\Columns\IconColumn::make('is_active')
                     ->label('上架')
                     ->boolean(),
+
+                Tables\Columns\TextColumn::make('view_count')
+                    ->label('瀏覽')
+                    ->sortable()
+                    ->toggleable(), // 允許隱藏
+
+                Tables\Columns\TextColumn::make('sold_count')
+                    ->label('已售')
+                    ->sortable()
+                    ->toggleable(),
             ])
             ->filters([
                 Tables\Filters\SelectFilter::make('shop_category_id')
