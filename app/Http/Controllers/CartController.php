@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Services\CartService;
 use App\Models\ProductVariant;
 use Illuminate\Http\Request;
+use Inertia\Inertia;
 
 class CartController extends Controller
 {
@@ -13,6 +14,18 @@ class CartController extends Controller
     public function __construct(CartService $cartService)
     {
         $this->cartService = $cartService;
+    }
+
+    // V2: 購物車頁面
+    public function indexV2()
+    {
+        $cartItems = $this->cartService->getCartDetails();
+        $total = $this->cartService->total();
+
+        return Inertia::render('Shop/Cart', [
+            'cartItems' => $cartItems,
+            'total' => $total,
+        ]);
     }
 
     // 顯示購物車頁面

@@ -11,6 +11,7 @@ use App\Services\ECPayService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Inertia\Inertia;
 
 class CheckoutController extends Controller
 {
@@ -19,6 +20,32 @@ class CheckoutController extends Controller
     public function __construct(CartService $cartService)
     {
         $this->cartService = $cartService;
+    }
+
+    // V2: 結帳頁面
+    public function indexV2()
+    {
+        $cartItems = $this->cartService->getCartDetails();
+
+        if ($cartItems->isEmpty()) {
+            return redirect()->route('shop.index'); // 導回商店
+        }
+
+        $total = $this->cartService->total();
+
+        return Inertia::render('Shop/Checkout', [
+            'cartItems' => $cartItems,
+            'total' => $total,
+        ]);
+    }
+
+    // V2: 成功頁面
+    public function successV2($id)
+    {
+        $order = Order::findOrFail($id);
+        return Inertia::render('Shop/Success', [
+            'order' => $order
+        ]);
     }
 
     // 顯示結帳頁面

@@ -20,7 +20,7 @@
                 if ($item->type === 'category') {
                     $cat = \App\Models\ShopCategory::find($item->target_id);
                     if ($cat) {
-                        $url = route('shop.category', $cat->slug);
+                        $url = route('v1.shop.category', $cat->slug);
                         $children = $cat->children()->where('is_visible', true)->orderBy('sort_order')->get();
                         $hasChildren = $children->isNotEmpty();
                     }
@@ -30,7 +30,7 @@
                         // 這裡需要支援 tag 路由，或是帶參數的 category 路由
                         // 暫時導向 shop.index 帶 tag 參數，或者您需要新建一個 route('shop.tag', $slug)
                         // 簡單作法：搜尋頁帶 tag 參數
-                        $url = route('shop.index', ['tag' => $tag->slug]);
+                        $url = route('v1.shop.index', ['tag' => $tag->slug]);
                     }
                 } elseif ($item->type === 'link') {
                     $url = $item->url;
@@ -51,7 +51,7 @@
                 <div class="absolute left-0 top-full pt-1 hidden group-hover:block w-48 z-50">
                   <div class="bg-white border shadow-xl rounded-lg py-2">
                     @foreach ($children as $child)
-                      <a href="{{ route('shop.category', $child->slug) }}"
+                      <a href="{{ route('v1.shop.category', $child->slug) }}"
                         class="block px-4 py-2 text-gray-700 hover:bg-blue-50 hover:text-blue-600">
                         {{ $child->name }}
                       </a>
@@ -99,7 +99,7 @@
               if ($item->type === 'category') {
                   $cat = \App\Models\ShopCategory::find($item->target_id);
                   if ($cat) {
-                      $url = route('shop.category', $cat->slug);
+                      $url = route('v1.shop.category', $cat->slug);
                       // 取得子分類
                       $children = $cat->children()->where('is_visible', true)->orderBy('sort_order')->get();
                       $hasChildren = $children->isNotEmpty();
@@ -108,7 +108,7 @@
                   $tag = \App\Models\ProductTag::find($item->target_id);
                   if ($tag) {
                       // 導向帶 tag 參數的首頁 (或搜尋頁)
-                      $url = route('shop.index', ['tag' => $tag->slug]);
+                      $url = route('v1.shop.index', ['tag' => $tag->slug]);
                   }
               } elseif ($item->type === 'link') {
                   $url = $item->url;
@@ -139,7 +139,7 @@
                 <ul x-show="expanded" x-collapse class="pl-4 mt-1 space-y-1 text-sm border-l-2 border-gray-100 ml-2">
                   @foreach ($children as $child)
                     <li>
-                      <a href="{{ route('shop.category', $child->slug) }}"
+                      <a href="{{ route('v1.shop.category', $child->slug) }}"
                         class="block py-1.5 px-2 text-gray-600 hover:text-blue-600 rounded hover:bg-gray-50 transition">
                         {{ $child->name }}
                       </a>
@@ -183,7 +183,7 @@
               if ($item->type === 'category') {
                   $cat = \App\Models\ShopCategory::find($item->target_id);
                   if ($cat) {
-                      $url = route('shop.category', $cat->slug);
+                      $url = route('v1.shop.category', $cat->slug);
                       $children = $cat->children()->where('is_visible', true)->orderBy('sort_order')->get();
                       $hasChildren = $children->isNotEmpty();
                   }
@@ -191,7 +191,7 @@
                   $tag = \App\Models\ProductTag::find($item->target_id);
                   if ($tag) {
                       // 導向帶 tag 參數的首頁 (或搜尋頁)
-                      $url = route('shop.index', ['tag' => $tag->slug]);
+                      $url = route('v1.shop.index', ['tag' => $tag->slug]);
                   }
               } elseif ($item->type === 'link') {
                   $url = $item->url;
@@ -229,7 +229,7 @@
 
                   @foreach ($children as $child)
                     <li class="py-1 pr-2">
-                      <a href="{{ route('shop.category', $child->slug) }}"
+                      <a href="{{ route('v1.shop.category', $child->slug) }}"
                         class="block text-gray-600 text-sm hover:text-blue-600">
                         {{ $child->name }}
                       </a>

@@ -6,9 +6,38 @@ use App\Models\Brand;
 use App\Models\DeviceModel;
 use App\Models\Inquiry;
 use Illuminate\Http\Request;
+use Inertia\Inertia;
 
 class RepairController extends Controller
 {
+    public function indexV2()
+    {
+        // 抓取資料邏輯與 V1 相同
+        $brands = \App\Models\Brand::with([
+            'deviceCategories',
+            'deviceModels' => function ($query) {
+                $query->orderBy('sort_order', 'asc');
+            }
+        ])
+            ->orderBy('sort_order', 'asc')
+            ->get();
+
+        return Inertia::render('Repair/Index', compact('brands'));
+    }
+
+    public function showV2($id)
+    {
+        // 抓取裝置與價格 (依照排序)
+        $device = \App\Models\DeviceModel::with(['brand', 'prices' => function ($query) {
+            $query->join('repair_items', 'device_repair_prices.repair_item_id', '=', 'repair_items.id')
+                ->select('device_repair_prices.*')
+                ->orderBy('repair_items.sort_order', 'asc');
+        }, 'prices.repairItem'])
+            ->findOrFail($id);
+
+        return Inertia::render('Repair/Show', compact('device'));
+    }
+
     // 顯示所有品牌與裝置
     public function index()
     {

@@ -50,25 +50,25 @@
 
           <!-- A. 電腦版連結 (手機版隱藏) -->
           <div class="hidden md:flex space-x-6 items-center">
-            <a href="{{ route('about') }}" class="nav-link {{ request()->routeIs('about') ? 'active' : '' }}">關於我們</a>
-            <a href="{{ route('news.index') }}"
+            <a href="{{ route('v1.about') }}" class="nav-link {{ request()->routeIs('about') ? 'active' : '' }}">關於我們</a>
+            <a href="{{ route('v1.news.index') }}"
               class="nav-link {{ request()->routeIs('news.*') ? 'active' : '' }}">最新消息</a>
-            <a href="{{ route('cases.index') }}"
+            <a href="{{ route('v1.cases.index') }}"
               class="nav-link {{ request()->routeIs('cases.*') ? 'active' : '' }}">維修案例</a>
-            <a href="{{ route('repair.index') }}"
+            <a href="{{ route('v1.repair.index') }}"
               class="nav-link {{ request()->routeIs('repair.*') ? 'active' : '' }}">維修報價</a>
-            <a href="{{ route('shop.index') }}"
+            <a href="{{ route('v1.shop.index') }}"
               class="nav-link {{ request()->routeIs('shop.*') ? 'active' : '' }}">線上商店</a>
-            <a href="{{ route('process') }}"
+            <a href="{{ route('v1.process') }}"
               class="nav-link {{ request()->routeIs('process') ? 'active' : '' }}">送修流程</a>
-            <a href="{{ route('stores.index') }}"
+            <a href="{{ route('v1.stores.index') }}"
               class="nav-link {{ request()->routeIs('stores.*') ? 'active' : '' }}">服務據點</a>
           </div>
 
           <!-- B. 購物車按鈕 (電腦/手機都顯示，且永遠在右側群組中) -->
           <div x-data="{ count: {{ array_sum(session('cart', [])) }} }" @cart-updated.window="count = $event.detail.count"
             class="relative flex items-center">
-            <a href="{{ route('cart.index') }}" class="p-2 text-gray-600 hover:text-blue-600 block relative">
+            <a href="{{ route('v1.cart.index') }}" class="p-2 text-gray-600 hover:text-blue-600 block relative">
               <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                   d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z">
@@ -103,19 +103,19 @@
       x-transition:enter-start="opacity-0 -translate-y-2" x-transition:enter-end="opacity-100 translate-y-0"
       class="md:hidden bg-white border-t absolute w-full left-0 shadow-lg z-40">
       <div class="px-2 pt-2 pb-4 space-y-1">
-        <a href="{{ route('about') }}"
+        <a href="{{ route('v1.about') }}"
           class="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-blue-600 hover:bg-gray-50">關於我們</a>
-        <a href="{{ route('news.index') }}"
+        <a href="{{ route('v1.news.index') }}"
           class="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-blue-600 hover:bg-gray-50">最新消息</a>
-        <a href="{{ route('cases.index') }}"
+        <a href="{{ route('v1.cases.index') }}"
           class="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-blue-600 hover:bg-gray-50">維修案例</a>
-        <a href="{{ route('repair.index') }}"
+        <a href="{{ route('v1.repair.index') }}"
           class="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-blue-600 hover:bg-gray-50">維修報價</a>
-        <a href="{{ route('shop.index') }}"
+        <a href="{{ route('v1.shop.index') }}"
           class="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-blue-600 hover:bg-gray-50">線上商店</a>
-        <a href="{{ route('process') }}"
+        <a href="{{ route('v1.process') }}"
           class="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-blue-600 hover:bg-gray-50">送修流程</a>
-        <a href="{{ route('stores.index') }}"
+        <a href="{{ route('v1.stores.index') }}"
           class="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-blue-600 hover:bg-gray-50">服務據點</a>
       </div>
     </div>
@@ -137,15 +137,15 @@
         <div>
           <h4 class="text-white text-lg font-bold mb-4">快速連結</h4>
           <ul class="space-y-2 text-sm">
-            <li><a href="{{ route('repair.index') }}" class="hover:text-white">維修價格查詢</a></li>
-            <li><a href="{{ route('shop.index') }}" class="hover:text-white">線上商店</a></li>
-            <li><a href="{{ route('process') }}" class="hover:text-white">送修流程說明</a></li>
+            <li><a href="{{ route('v1.repair.index') }}" class="hover:text-white">維修價格查詢</a></li>
+            <li><a href="{{ route('v1.shop.index') }}" class="hover:text-white">線上商店</a></li>
+            <li><a href="{{ route('v1.process') }}" class="hover:text-white">送修流程說明</a></li>
           </ul>
         </div>
         <div>
           <h4 class="text-white text-lg font-bold mb-4">聯絡我們</h4>
           <p class="text-sm mb-2">如有任何問題，歡迎親臨門市或來電洽詢。</p>
-          <a href="{{ route('stores.index') }}"
+          <a href="{{ route('v1.stores.index') }}"
             class="inline-block bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700">
             查找最近分店
           </a>

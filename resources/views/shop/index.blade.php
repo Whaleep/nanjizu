@@ -6,7 +6,7 @@
   <h1 class="text-3xl font-bold text-center mb-10">線上商店</h1>
 
   <!-- 搜尋框 -->
-  <form action="{{ route('shop.index') }}" method="GET" class="max-w-md mx-auto mb-12">
+  <form action="{{ route('v1.shop.index') }}" method="GET" class="max-w-md mx-auto mb-12">
     <div class="relative">
       <input type="text" name="q"
         class="w-full border-2 border-gray-200 rounded-full pl-5 pr-12 py-3 focus:outline-none focus:border-blue-500 transition"
@@ -26,7 +26,7 @@
     <h2 class="text-2xl font-bold mb-6 text-gray-800">瀏覽分類</h2>
     <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
       @foreach ($categories as $category)
-        <a href="{{ route('shop.category', $category->slug) }}"
+        <a href="{{ route('v1.shop.category', $category->slug) }}"
           class="block bg-white border rounded-lg p-4 text-center hover:shadow-md hover:border-blue-500 transition">
           <span class="font-medium text-gray-700">{{ $category->name }}</span>
         </a>
@@ -40,7 +40,7 @@
 
     <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6">
       @foreach ($products as $product)
-        <a href="{{ route('shop.product', $product->slug) }}"
+        <a href="{{ route('v1.shop.product', $product->slug) }}"
           class="bg-white border rounded-lg overflow-hidden hover:shadow-lg transition group flex flex-col">
           <!-- 圖片區塊 -->
           <div class="aspect-square bg-gray-100 overflow-hidden relative">
