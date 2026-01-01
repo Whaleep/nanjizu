@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Product;
 use App\Models\ShopCategory;
 use App\Models\ProductTag;
+use App\Models\Review;
 use Illuminate\Http\Request;
 
 class ShopService
@@ -146,7 +147,9 @@ class ShopService
 
         if ($user) {
             // 1. 檢查是否已評價
-            $hasReviewed = $product->reviews->where('user_id', $user->id)->isNotEmpty();
+            $hasReviewed = Review::where('user_id', $user->id)
+                ->where('product_id', $product->id)
+                ->exists();
 
             if ($hasReviewed) {
                 $reviewStatus = 'reviewed';
