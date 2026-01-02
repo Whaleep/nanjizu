@@ -21,15 +21,13 @@ jobs:
         with:
           node-version: "20"
 
-      # 3. 編譯前端資源 (包含修正 .gitignore)
+      # 3. 編譯前端資源
       - name: ⚡ Build Assets
         run: |
           npm install
           npm run build
-          # 強制讓 FTP Action 看得見 build 資料夾 (重要！)
-          sed -i '/public\/build/d' .gitignore
 
-      # 3.5 清空遠端 build 資料夾
+      # 3.5 清空遠端並重建資料夾結構
       - name: 🧹 Clean remote build assets
         uses: appleboy/ssh-action@master
         with:
@@ -38,9 +36,14 @@ jobs:
           password: ${{ secrets.SSH_PASSWORD }}
           port: ${{ secrets.SSH_PORT }}
           script: |
-            # 刪除 build 資料夾下的所有內容，但保留資料夾本身
-            # 這裡的路徑請確保與您的 Hostinger 結構一致
-            rm -rf domains/sienna-beaver-875544.hostingersite.com/laravel_core/public/build/* || true
+            # 設定路徑
+            BUILD_PATH="domains/sienna-beaver-875544.hostingersite.com/laravel_core/public/build"
+
+            # 清空舊檔案
+            rm -rf $BUILD_PATH/* || true
+
+            # 重建 assets 目錄，避免 FTP 550 錯誤
+            mkdir -p $BUILD_PATH/assets
 
       # 4. FTP 同步檔案
       - name: 📂 Sync files via FTP
@@ -50,7 +53,6 @@ jobs:
           username: ${{ secrets.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
           server-dir: /domains/sienna-beaver-875544.hostingersite.com/laravel_core/
-          # 因為我們在 Step 3 修改了 .gitignore，這裡不需要額外設定 include
           exclude: |
             **/.git*
             **/.git*/**
@@ -79,11 +81,8 @@ jobs:
             # 資料庫遷移
             php artisan migrate --force
 
-            # 清除並重建快取 (這對 Inertia/Vite 很重要)
+            # 清除並重建快取
             php artisan optimize:clear
             php artisan config:cache
             php artisan route:cache
             php artisan view:cache
-
-            # 確保 Storage Link 存在 (如果有移動資料夾結構，有時需要手動建，但通常跑一次就好)
-            # php artisan storage:link || true
