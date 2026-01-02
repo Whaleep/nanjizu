@@ -27,5 +27,15 @@ const formatPrice = (price) => new Intl.NumberFormat('zh-TW').format(price);
             </div>
             <Link href="/shop" class="bg-blue-600 text-white px-6 py-2 rounded font-bold hover:bg-blue-700">繼續購物</Link>
         </div>
+
+        <!-- 如果選擇銀行轉帳，顯示轉帳資訊 -->
+        <div v-if="order.payment_method === 'bank_transfer'" class="mt-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg text-yellow-900 text-sm">
+            <h4 class="font-bold mb-2 text-lg">🏦 匯款資訊</h4>
+            <p>銀行代碼：<strong>822 (中國信託)</strong></p>
+            <p>銀行帳號：<strong>1234-5678-9012</strong></p>
+            <p>戶名：<strong>ABC手機維修</strong></p>
+            <hr class="border-yellow-200 my-2">
+            <p class="text-xs">請於匯款後，透過 Line 告知您的「訂單編號」與「帳號末五碼」，以利我們快速對帳出貨。</p>
+        </div>
     </MainLayout>
 </template>

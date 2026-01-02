@@ -26,13 +26,13 @@ class StorageStatsOverview extends BaseWidget
         // 轉換為 MB
         $sizeInMb = round($size / 1024 / 1024, 2);
 
-        // 假設主機限額 10GB (可自訂)
-        $limit = 10 * 1024;
+        // 假設主機限額 5GB (可自訂)
+        $limit = 5 * 1024;
         $percentage = round(($sizeInMb / $limit) * 100, 1);
 
         return [
             Stat::make('圖片佔用空間', $sizeInMb . ' MB')
-                ->description("已使用 {$percentage}% (總量 10GB)")
+                ->description("已使用 {$percentage}% (總量 5GB)")
                 ->descriptionIcon('heroicon-m-photo')
                 ->color($percentage > 80 ? 'danger' : 'success')
                 ->chart([$sizeInMb, $sizeInMb]), // 簡單顯示

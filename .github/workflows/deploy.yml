@@ -3,7 +3,7 @@ name: Deploy to Hostinger
 on:
   push:
     branches:
-      - main  # 請確認您的分支名稱
+      - main
 
 jobs:
   web-deploy:
@@ -19,7 +19,7 @@ jobs:
       - name: 🟢 Setup Node.js
         uses: actions/setup-node@v3
         with:
-          node-version: '20'
+          node-version: "20"
 
       # 3. 編譯前端資源 (Vite)
       # 這裡我們只做前端 build，產生 public/build
@@ -28,16 +28,28 @@ jobs:
           npm install
           npm run build
 
-      # 4. FTP 同步檔案 (排除 vendor)
+      # === [NEW] 步驟 3.5: 先清空遠端的 build 資料夾 ===
+      # 這樣可以確保舊的 js/css 檔案被刪除，不會佔用空間
+      - name: 🧹 Clean remote build assets
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USERNAME }}
+          password: ${{ secrets.SSH_PASSWORD }}
+          port: ${{ secrets.SSH_PORT }}
+          script: |
+            # 強制刪除 public/build 底下的所有檔案，但保留資料夾本身
+            # || true 代表就算資料夾不存在也不要報錯停止
+            rm -rf domains/sienna-beaver-875544.hostingersite.com/laravel_core/public/build/* || true
+
+      # 4. FTP 同步檔案
       - name: 📂 Sync files via FTP
         uses: SamKirkland/FTP-Deploy-Action@v4.3.4
         with:
           server: ${{ secrets.FTP_SERVER }}
           username: ${{ secrets.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
-          # Hostinger 的路徑
           server-dir: /domains/sienna-beaver-875544.hostingersite.com/laravel_core/
-
           exclude: |
             **/.git*
             **/.git*/**
@@ -48,7 +60,7 @@ jobs:
             storage/*.key
             tests/**
 
-      # 5. 透過 SSH 執行 Laravel 指令 (Composer & Artisan)
+      # 5. 透過 SSH 執行 Laravel 指令
       - name: 🚀 Run Commands via SSH
         uses: appleboy/ssh-action@master
         with:
@@ -59,13 +71,8 @@ jobs:
           # 增加 timeout 時間，以免 composer 跑太久斷線
           timeout: 60s
           script: |
-            # 進入核心目錄
             cd domains/sienna-beaver-875544.hostingersite.com/laravel_core
-
-            # 在伺服器端執行 Composer ===
             composer install --no-dev --optimize-autoloader
-
-            # 執行遷移
             php artisan migrate --force
 
             # 清除快取 (Inertia 開發者建議：部署後最好重啟 queue 或清空快取)
@@ -73,7 +80,4 @@ jobs:
             php artisan config:cache
             php artisan route:cache
             php artisan view:cache
-
-            # 確保 storage link 存在
             php artisan storage:link || true
-

@@ -3,7 +3,7 @@
 namespace App\Filament\Resources;
 
 use App\Filament\Resources\PageResource\Pages;
-use App\Filament\Resources\PageResource\RelationManagers;
+use App\Filament\Blocks\ContentBlocks;
 use App\Models\Page;
 use Filament\Forms;
 use Filament\Forms\Form;
@@ -44,54 +44,11 @@ class PageResource extends Resource
                             ->default(true),
                     ])->columns(2),
 
-                    // === 核心：視覺化編輯器 ===
                     Forms\Components\Section::make('頁面內容')->schema([
                         Builder::make('content')
                             ->label('頁面區塊')
-                            ->blocks([
-                                // 區塊 1: Hero Banner
-                                Builder\Block::make('hero')
-                                    ->label('英雄看板 (Hero)')
-                                    ->schema([
-                                        Forms\Components\TextInput::make('heading')->label('主標題')->required(),
-                                        Forms\Components\TextInput::make('subheading')->label('副標題'),
-                                        Forms\Components\FileUpload::make('image')
-                                            ->label('背景圖片')
-                                            ->image()
-                                            ->directory('pages'),
-                                        Forms\Components\TextInput::make('button_text')->label('按鈕文字'),
-                                        Forms\Components\TextInput::make('button_url')->label('按鈕連結'),
-                                    ]),
-
-                                // 區塊 2: 富文本 (Rich Text)
-                                Builder\Block::make('text_content')
-                                    ->label('純文字內容')
-                                    ->schema([
-                                        Forms\Components\RichEditor::make('body')
-                                            ->label('內容')
-                                            ->required(),
-                                    ]),
-
-                                // 區塊 3: 圖文並茂 (Image + Text)
-                                Builder\Block::make('image_with_text')
-                                    ->label('圖文區塊')
-                                    ->schema([
-                                        Forms\Components\Select::make('layout')
-                                            ->label('排版方向')
-                                            ->options([
-                                                'left' => '圖在左，文在右',
-                                                'right' => '圖在右，文在左',
-                                            ])
-                                            ->default('left'),
-                                        Forms\Components\FileUpload::make('image')
-                                            ->label('圖片')
-                                            ->image()
-                                            ->directory('pages'),
-                                        Forms\Components\RichEditor::make('content')
-                                            ->label('文字內容'),
-                                    ]),
-                            ])
-                            ->collapsible() // 可折疊
+                            ->blocks(ContentBlocks::make()) // <--- 呼叫共用設定
+                            ->collapsible()
                             ->cloneable(), // 可複製區塊
                     ]),
                 ])->columnSpanFull(),
@@ -99,7 +56,7 @@ class PageResource extends Resource
     }
 
 
-public static function table(Table $table): Table
+    public static function table(Table $table): Table
     {
         return $table
             ->columns([

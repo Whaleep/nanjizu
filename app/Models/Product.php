@@ -13,6 +13,13 @@ class Product extends Model
     use HasFactory;
     protected $guarded = [];
 
+    protected $casts = [
+        'images' => 'array',
+        'description' => 'array', // 自動轉為陣列
+        'is_active' => 'boolean',
+        'content' => 'array',
+    ];
+
     public function category(): BelongsTo
     {
         return $this->belongsTo(ShopCategory::class, 'shop_category_id');

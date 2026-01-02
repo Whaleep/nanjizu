@@ -25,7 +25,7 @@ const updateQuantity = async (variantId, qty) => {
     try {
         await axios.post('/cart/update', { variant_id: variantId, quantity: qty });
         // 重新載入頁面資料 (Inertia 方式)
-        router.reload({ only: ['cartItems', 'total', 'cartCount'] });
+        router.reload({ only: ['cartItems', 'subtotal', 'total', 'cartCount'] });
     } catch (error) {
         alert('更新失敗: ' + (error.response?.data?.message || '未知錯誤'));
     }

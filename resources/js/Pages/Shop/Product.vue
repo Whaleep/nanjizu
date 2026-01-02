@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed } from 'vue';
+import { ref, watch, computed } from 'vue';
 import { Head, Link, useForm, usePage } from '@inertiajs/vue3';
 import ShopLayout from '@/Layouts/ShopLayout.vue';
 import axios from 'axios';
@@ -63,6 +63,26 @@ const addToCart = async () => {
     }
 };
 
+// === 多圖畫廊邏輯 ===
+// 確保 images 是陣列 (相容舊資料)
+const galleryImages = computed(() => {
+    let imgs = props.product.images || [];
+    // 如果舊的單張 image 欄位有值且不在 images 裡，加進去 (過渡期處理)
+    if (props.product.image && !imgs.includes(props.product.image)) {
+        imgs.unshift(props.product.image);
+    }
+    return imgs.length > 0 ? imgs : [];
+});
+
+const currentImage = ref(galleryImages.value[0] || null);
+
+// 當選中規格改變時，如果該規格有圖片，就切換過去
+watch(selectedVariant, (newVal) => {
+    if (newVal.image) {
+        currentImage.value = newVal.image;
+    }
+});
+
 // 切換收藏
 const toggleWishlist = async () => {
     // 1. 使用 usePage() 獲取全域共享資料
@@ -114,6 +134,23 @@ const submitReview = () => {
     });
 };
 
+// 引入 Builder Components (如果要在商品頁用 Builder)
+import HeroSection from '@/Components/Blocks/HeroSection.vue';
+import TextContent from '@/Components/Blocks/TextContent.vue';
+import ImageWithText from '@/Components/Blocks/ImageWithText.vue';
+import Accordion from '@/Components/Blocks/Accordion.vue';
+import Specification from '@/Components/Blocks/Specification.vue';
+import ModalBtn from '@/Components/Blocks/ModalBtn.vue';
+
+const components = {
+    hero: HeroSection,
+    text_content: TextContent,
+    image_with_text: ImageWithText,
+    accordion: Accordion,
+    specification: Specification,
+    modal_btn: ModalBtn,
+};
+
 // 準備 Schema.org 資料
 const schemaData = {
     "@context": "https://schema.org/",
@@ -155,21 +192,43 @@ const schemaData = {
             </div>
         </transition>
 
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-10">
-            <!-- 左側圖片 -->
-            <div class="bg-gray-100 rounded-2xl overflow-hidden border aspect-square flex items-center justify-center">
-                <img v-if="product.image" :src="`/storage/${product.image}`" class="w-full h-full object-cover">
-                <span v-else class="text-gray-400">No Image</span>
+        <!-- 上半部：商品主要資訊區 (永遠保持左右分欄) -->
+        <div class="grid grid-cols-1 md:grid-cols-12 gap-10">
+
+            <!-- 左側：圖片區 (佔 5 等份，約 41%) -->
+            <div class="md:col-span-5">
+
+                <!-- 主圖 -->
+                <div class="aspect-square bg-gray-100 rounded-2xl overflow-hidden border mb-4 flex items-center justify-center relative">
+                    <img v-if="currentImage" :src="`/storage/${currentImage}`" class="w-full h-full object-cover transition-all duration-300">
+                    <span v-else class="text-gray-400">No Image</span>
+                </div>
+
+                <!-- 縮圖列表 -->
+                <div class="flex gap-2 overflow-x-auto pb-2" v-if="galleryImages.length > 1">
+                    <button v-for="img in galleryImages" :key="img"
+                            @click="currentImage = img"
+                            class="w-20 h-20 rounded-lg overflow-hidden border-2 flex-shrink-0"
+                            :class="currentImage === img ? 'border-blue-600' : 'border-transparent hover:border-gray-300'">
+                        <img :src="`/storage/${img}`" class="w-full h-full object-cover">
+                    </button>
+                </div>
             </div>
 
-            <!-- 資訊 -->
-            <div>
+            <!-- 右側：資訊區 (佔 7 等份 = 58%) -->
+            <div class="md:col-span-7">
                 <nav class="text-sm text-gray-500 mb-4">
                     <Link href="/shop" class="hover:underline">商店</Link> /
                     <Link :href="`/shop/category/${product.category.slug}`" class="hover:underline">{{ product.category.name }}</Link>
                 </nav>
 
                 <h1 class="text-3xl font-bold mb-2">{{ product.name }}</h1>
+
+                <!-- 新增：摘要顯示 -->
+                <div v-if="product.excerpt" class="text-gray-600 mb-4 font-medium leading-relaxed whitespace-pre-wrap">
+                    {{ product.excerpt }}
+                </div>
+
                 <div class="flex items-center gap-2 mb-4">
                     <div class="flex text-yellow-400">
                         <template v-for="i in 5" :key="i">
@@ -182,6 +241,7 @@ const schemaData = {
                 </div>
                 <p class="text-gray-500 text-sm mb-4">全系列價格：{{ priceRange }}</p>
 
+                <!-- 當前選中規格的價格 -->
                 <div class="mb-6">
                     <div class="text-3xl text-red-600 font-bold mb-2">
                         NT$ {{ formatPrice(selectedVariant.price) }}
@@ -196,30 +256,36 @@ const schemaData = {
                     </div>
                 </div>
 
-                <!-- 規格按鈕 -->
+                <!-- 規格選擇按鈕 -->
                 <div class="mb-8">
                     <h3 class="text-sm font-bold text-gray-700 mb-3">規格</h3>
                     <div class="flex flex-wrap gap-3">
                         <button v-for="variant in product.variants" :key="variant.id"
                                 @click="selectedVariant = variant"
-                                class="px-4 py-2 border rounded-lg font-medium transition"
+                                class="px-4 py-2 border rounded-lg font-medium transition flex items-center gap-2"
                                 :class="selectedVariant.id === variant.id ? 'border-blue-600 bg-blue-50 text-blue-700 ring-1 ring-blue-600' : 'hover:border-gray-300 text-gray-700'"
                                 :disabled="variant.stock <= 0">
-                            {{ variant.name }}
+                            <div class="flex items-center gap-2">
+                                <!-- 如果規格有圖，顯示小縮圖 -->
+                                <img v-if="variant.image" :src="`/storage/${variant.image}`" class="w-6 h-6 rounded-full object-cover border">
+                                {{ variant.name }}
+                            </div>
                             <span v-if="variant.stock <= 0" class="text-xs text-red-500 ml-1">(缺貨)</span>
                         </button>
                     </div>
                 </div>
 
                 <!-- 購買區塊 -->
-                <div class="flex gap-4">
+                <div class="flex gap-4 mb-8">
                     <input type="number" v-model="quantity" min="1" :max="selectedVariant.stock" class="w-32 border rounded-lg px-4 py-3 text-center font-bold">
                     <button @click="addToCart"
                             :disabled="selectedVariant.stock <= 0 || isLoading"
-                            class="flex-1 bg-blue-600 text-white font-bold py-3 rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition shadow-lg flex items-center justify-center gap-2">
-                        <svg v-if="isLoading" class="animate-spin h-5 w-5" viewBox="0 0 24 24"><!-- Spinner SVG --></svg>
-                        {{ isLoading ? '處理中...' : (selectedVariant.stock > 0 ? '加入購物車' : '補貨中') }}
+                            class="flex-1 bg-blue-600 text-white font-bold py-3 rounded-lg hover:bg-blue-700 disabled:bg-gray-400 transition shadow-lg flex items-center justify-center gap-2">
+                        <svg v-if="isLoading" class="animate-spin h-5 w-5" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2a10 10 0 1010 10A10 10 0 0012 2zm0 18a8 8 0 118-8 8 8 0 01-8 8z" opacity=".3"/><path fill="currentColor" d="M20.24 12.24a8 8 0 01-2.48 5.66" /></svg>
+                        {{ isLoading ? '處理中...' : (selectedVariant.stock > 0 ? '加入購物車' : '暫無庫存') }}
                     </button>
+
+                    <!-- 收藏按鈕 -->
                     <button @click="toggleWishlist"
                 class="w-12 h-[50px] border rounded-lg flex items-center justify-center transition hover:border-red-400"
                 :class="isWishlisted ? 'border-red-500 bg-red-50 text-red-500' : 'border-gray-300 text-gray-400'">
@@ -229,7 +295,21 @@ const schemaData = {
                     </button>
                 </div>
 
-                <div class="mt-10 border-t pt-8 prose text-gray-600" v-html="product.description"></div>
+                <!-- 商品描述 (右側 Builder) -->
+                <!-- 這裡原本是 v-html="product.description"，現在要改迴圈 -->
+                <div v-if="product.description && product.description.length > 0" class="mt-10 border-t pt-8">
+                    <h3 class="text-lg font-bold text-gray-900 mb-4">商品介紹</h3>
+                    <div v-for="(block, index) in product.description" :key="index">
+                        <component :is="components[block.type]" v-if="components[block.type]" :data="block.data" />
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 下方排版 (Builder) -->
+        <div v-if="product.content && product.content.length > 0" class="mt-16 border-t pt-10">
+            <div v-for="(block, index) in product.content" :key="index">
+                <component :is="components[block.type]" v-if="components[block.type]" :data="block.data" />
             </div>
         </div>
 

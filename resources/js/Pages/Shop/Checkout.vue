@@ -36,6 +36,28 @@ const submit = () => {
     <Head title="結帳" />
     <MainLayout>
         <div class="container mx-auto px-4 py-12">
+
+            <!-- 新增：訪客警語 -->
+            <div v-if="!$page.props.auth.user" class="max-w-4xl mx-auto mb-8 bg-orange-50 border-l-4 border-orange-500 p-4 rounded-r shadow-sm">
+                <div class="flex">
+                    <div class="flex-shrink-0">
+                        <svg class="h-5 w-5 text-orange-400" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                        </svg>
+                    </div>
+                    <div class="ml-3">
+                        <p class="text-sm text-orange-700">
+                            <span class="font-bold">注意：</span>
+                            您目前是訪客身分。下單後將<strong class="underline">無法</strong>登入系統查詢訂單狀態或歷史紀錄。
+                            <br class="hidden sm:block">
+                            建議您先
+                            <Link href="/login" class="font-bold underline hover:text-orange-900">登入</Link> 或
+                            <Link href="/register" class="font-bold underline hover:text-orange-900">註冊會員</Link>。
+                        </p>
+                    </div>
+                </div>
+            </div>
+
             <h1 class="text-3xl font-bold mb-8 text-center">填寫結帳資料</h1>
 
             <div class="max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-10">
@@ -77,6 +99,10 @@ const submit = () => {
                         <div class="bg-white p-6 rounded-lg shadow border mb-6">
                             <h3 class="text-xl font-bold mb-4">付款方式</h3>
                             <div class="space-y-2">
+                                <label class="flex items-center gap-2 p-3 border rounded cursor-pointer hover:bg-gray-50">
+                                    <input type="radio" name="payment_method" value="bank_transfer" v-model="form.payment_method">
+                                    <span>銀行轉帳 / ATM (人工對帳)</span>
+                                </label>
                                 <label class="flex items-center gap-2 p-3 border rounded cursor-pointer hover:bg-gray-50">
                                     <input type="radio" name="payment_method" value="cod" v-model="form.payment_method">
                                     <span>貨到付款</span>

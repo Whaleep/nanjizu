@@ -6,6 +6,9 @@ import MainLayout from '@/Layouts/MainLayout.vue';
 import HeroSection from '@/Components/Blocks/HeroSection.vue';
 import TextContent from '@/Components/Blocks/TextContent.vue';
 import ImageWithText from '@/Components/Blocks/ImageWithText.vue';
+import Accordion from '@/Components/Blocks/Accordion.vue';
+import Specification from '@/Components/Blocks/Specification.vue';
+import ModalBtn from '@/Components/Blocks/ModalBtn.vue';
 
 const props = defineProps({
     page: Object
@@ -16,6 +19,9 @@ const components = {
     hero: HeroSection,
     text_content: TextContent,
     image_with_text: ImageWithText,
+    accordion: Accordion,
+    specification: Specification,
+    modal_btn: ModalBtn,
 };
 </script>
 

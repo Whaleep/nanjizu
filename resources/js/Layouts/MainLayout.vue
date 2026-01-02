@@ -192,7 +192,7 @@ onUnmounted(() => {
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-8 mb-8">
                     <!-- 關於我們 -->
                     <div>
-                        <h4 class="text-white text-lg font-bold mb-4">關於男機組</h4>
+                        <h4 class="text-white text-lg font-bold mb-4">關於ABC</h4>
                         <p class="text-sm leading-relaxed text-gray-400">
                             我們專注於提供高品質的手機、平板與電腦維修服務。透明報價，現場快速取件，是您最值得信賴的手機急診室。
                         </p>
@@ -220,7 +220,7 @@ onUnmounted(() => {
                 </div>
 
                 <div class="border-t border-gray-700 pt-8 text-center text-sm text-gray-500">
-                    <p>&copy; {{ new Date().getFullYear() }} 男機組 CER Phone Repair. All rights reserved.</p>
+                    <p>&copy; {{ new Date().getFullYear() }} ABC CER Phone Repair. All rights reserved.</p>
                 </div>
             </div>
         </footer>

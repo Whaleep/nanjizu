@@ -8,7 +8,7 @@ import MainLayout from '@/Layouts/MainLayout.vue';
     <MainLayout>
 <div class="bg-gray-900 text-white py-20">
     <div class="container mx-auto px-4 text-center">
-        <h1 class="text-4xl font-bold mb-4">關於男機組</h1>
+        <h1 class="text-4xl font-bold mb-4">關於ABC</h1>
         <p class="text-xl text-gray-400">專業、誠信、快速 — 您的手機守護者</p>
     </div>
 </div>
@@ -19,7 +19,7 @@ import MainLayout from '@/Layouts/MainLayout.vue';
         <h2 class="text-3xl font-bold text-center mb-8 text-blue-800">我們的故事</h2>
         <div class="prose max-w-none text-gray-700 leading-relaxed text-lg">
             <p class="mb-6">
-                「男機組 CER Phone Repair」成立於台北，致力於提供最透明、最專業的手機維修服務。我們深知手機在現代生活中的重要性，因此我們打造了「手機急診室」的概念，強調現場快速維修、面對面檢測，讓顧客看得到過程，修得更安心。
+                「ABC CER Phone Repair」成立於台北，致力於提供最透明、最專業的手機維修服務。我們深知手機在現代生活中的重要性，因此我們打造了「手機急診室」的概念，強調現場快速維修、面對面檢測，讓顧客看得到過程，修得更安心。
             </p>
             <p>
                 不同於傳統維修店價格不透明、維修時間長的問題，男機組建立了完善的線上報價系統，並堅持使用高品質零件。無論是 iPhone、Android 手機，或是 MacBook、iPad、Switch 等電子產品，我們都有專業的技師團隊能為您解決疑難雜症。
