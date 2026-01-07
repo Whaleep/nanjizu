@@ -14,6 +14,12 @@ class EditOrder extends EditRecord
     {
         return [
             Actions\DeleteAction::make(),
+
+            \Filament\Actions\Action::make('print')
+                ->label('列印出貨單')
+                ->icon('heroicon-o-printer')
+                ->url(route('admin.orders.print', $this->record))
+                ->openUrlInNewTab(),
         ];
     }
 }

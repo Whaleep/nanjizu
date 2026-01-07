@@ -1,5 +1,5 @@
 <script setup>
-import { Head, useForm, usePage } from '@inertiajs/vue3';
+import { Head, Link, useForm, usePage } from '@inertiajs/vue3';
 import MainLayout from '@/Layouts/MainLayout.vue';
 
 const props = defineProps({
@@ -17,7 +17,7 @@ const form = useForm({
     customer_email: user ? user.email : '',
     customer_address: user ? user.address : '',
     notes: '',
-    payment_method: 'cod', // 預設貨到付款
+    payment_method: 'bank_transfer', // 預設選項
 });
 
 const submit = () => {
@@ -99,21 +99,25 @@ const submit = () => {
                         <div class="bg-white p-6 rounded-lg shadow border mb-6">
                             <h3 class="text-xl font-bold mb-4">付款方式</h3>
                             <div class="space-y-2">
-                                <label class="flex items-center gap-2 p-3 border rounded cursor-pointer hover:bg-gray-50">
-                                    <input type="radio" name="payment_method" value="bank_transfer" v-model="form.payment_method">
-                                    <span>銀行轉帳 / ATM (人工對帳)</span>
+                                <!-- 銀行轉帳 -->
+                                <label class="flex items-center gap-3 p-4 border rounded-lg cursor-pointer transition-all"
+                                    :class="form.payment_method === 'bank_transfer' ? 'border-blue-600 bg-blue-50 ring-1 ring-blue-600' : 'border-gray-200 hover:bg-gray-50'">
+                                    <input type="radio" name="payment_method" value="bank_transfer" v-model="form.payment_method" class="text-blue-600 focus:ring-blue-500">
+                                    <span class="font-medium text-gray-700">銀行轉帳 (人工對帳)</span>
                                 </label>
-                                <label class="flex items-center gap-2 p-3 border rounded cursor-pointer hover:bg-gray-50">
-                                    <input type="radio" name="payment_method" value="cod" v-model="form.payment_method">
-                                    <span>貨到付款</span>
+
+                                <!-- 貨到付款 -->
+                                <label class="flex items-center gap-3 p-4 border rounded-lg cursor-pointer transition-all"
+                                    :class="form.payment_method === 'cod' ? 'border-blue-600 bg-blue-50 ring-1 ring-blue-600' : 'border-gray-200 hover:bg-gray-50'">
+                                    <input type="radio" name="payment_method" value="cod" v-model="form.payment_method" class="text-blue-600 focus:ring-blue-500">
+                                    <span class="font-medium text-gray-700">貨到付款 / 現場付款</span>
                                 </label>
-                                <label class="flex items-center gap-2 p-3 border rounded cursor-pointer hover:bg-gray-50">
-                                    <input type="radio" name="payment_method" value="bank_transfer" v-model="form.payment_method">
-                                    <span>銀行匯款</span>
-                                </label>
-                                <label class="flex items-center gap-2 p-3 border rounded cursor-pointer hover:bg-gray-50">
-                                    <input type="radio" name="payment_method" value="ecpay" v-model="form.payment_method">
-                                    <span>綠界支付</span>
+
+                                <!-- 綠界支付 -->
+                                <label class="flex items-center gap-3 p-4 border rounded-lg cursor-pointer transition-all"
+                                    :class="form.payment_method === 'ecpay' ? 'border-blue-600 bg-blue-50 ring-1 ring-blue-600' : 'border-gray-200 hover:bg-gray-50'">
+                                    <input type="radio" name="payment_method" value="ecpay" v-model="form.payment_method" class="text-blue-600 focus:ring-blue-500">
+                                    <span class="font-medium text-gray-700">綠界支付 (信用卡/超商代碼)</span>
                                 </label>
                             </div>
                         </div>

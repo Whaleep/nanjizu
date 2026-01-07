@@ -52,12 +52,14 @@ const addToCart = async () => {
 
         // 2. 顯示右上角提示
         showToast.value = true;
-        setTimeout(() => showToast.value = false, 3000);
+        setTimeout(() => showToast.value = false, 5000);
 
         // 3. 移除 window.location.reload() <--- 這就是造成閃爍的主因！
 
     } catch (error) {
-        alert('加入失敗: ' + (error.response?.data?.message || '未知錯誤'));
+        // 失敗邏輯: 抓取後端回傳的 message
+        const msg = error.response?.data?.message || '加入失敗';
+        alert(msg); // 彈出「庫存不足...」
     } finally {
         isLoading.value = false;
     }
@@ -156,8 +158,8 @@ const schemaData = {
     "@context": "https://schema.org/",
     "@type": "Product",
     "name": props.product.name,
-    "image": props.product.image ? `${window.location.origin}/storage/${props.product.image}` : '',
-    "description": props.product.description ? props.product.description.replace(/<[^>]*>?/gm, '') : '', // 去除 HTML 標籤
+    "image": props.product.primary_image ? `${window.location.origin}/storage/${props.product.primary_image}` : '',
+    "description": props.product.excerpt || props.product.name,
     "sku": selectedVariant.value.sku || props.product.id,
     "offers": {
         "@type": "Offer",
@@ -178,6 +180,8 @@ const schemaData = {
     </Head>
 
     <ShopLayout>
+
+        <!-- Toast 通知元件 -->
         <transition
             enter-active-class="transition ease-out duration-300"
             enter-from-class="transform opacity-0 translate-y-2"

@@ -2,6 +2,7 @@
 
 namespace App\Filament\Blocks;
 
+use Filament\Forms;
 use Filament\Forms\Components\Builder\Block;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\TextInput;
@@ -56,6 +57,10 @@ class ContentBlocks
                         ->label('項目列表')
                         ->schema([
                             TextInput::make('title')->label('標題')->required(),
+                            // 預設展開開關
+                            Forms\Components\Toggle::make('is_open')
+                                ->label('預設展開')
+                                ->default(false), // 預設關閉
                             // 修正：統一用 Tiptap，且欄位名稱為 body 以配合您的前端修正，或是保留 content
                             // 這裡我們統一用 'body' 以防混淆，或者您前端要對應改
                             TiptapEditor::make('body')->label('內容')->required(),

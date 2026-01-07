@@ -8,6 +8,7 @@ use App\Models\ProductVariant;
 use App\Models\Coupon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Session;
+use Exception;
 
 class CartService
 {
@@ -50,7 +51,8 @@ class CartService
                 'variant_id' => $variant->id,
                 'product_name' => $variant->product->name,
                 'variant_name' => $variant->name,
-                'image' => $variant->product->image,
+                // 優先使用規格圖，沒有的話用商品主圖 (getPrimaryImageAttribute)
+                'image' => $variant->image ? $variant->image : $variant->product->primary_image,
                 'price' => $variant->price,
                 'stock' => $variant->stock,
                 'quantity' => $quantity,
@@ -62,8 +64,42 @@ class CartService
     // 加入購物車
     public function add($variantId, $quantity)
     {
+        // 1. 先抓出規格與庫存
+        $variant = ProductVariant::find($variantId);
+        if (!$variant) {
+            throw new Exception('商品規格不存在');
+        }
+
+        // 2. 取得目前購物車內該商品的數量
+        $currentQtyInCart = 0;
+
         if (Auth::check()) {
             // DB 模式
+            $user = Auth::user();
+            $cart = $user->cart; // 可能為 null
+            if ($cart) {
+                $item = $cart->items()->where('product_variant_id', $variantId)->first();
+                if ($item) {
+                    $currentQtyInCart = $item->quantity;
+                }
+            }
+        } else {
+            // Session 模式
+            $sessionCart = Session::get('cart', []);
+            if (isset($sessionCart[$variantId])) {
+                $currentQtyInCart = $sessionCart[$variantId];
+            }
+        }
+
+        // 3. 檢查總量是否超過庫存
+        if (($currentQtyInCart + $quantity) > $variant->stock) {
+            // 計算還能買幾個
+            $remaining = max(0, $variant->stock - $currentQtyInCart);
+            throw new Exception("庫存不足！目前購物車已有 {$currentQtyInCart} 件，您最多只能再加 {$remaining} 件。");
+        }
+
+        // 4. 通過檢查，執行寫入 (邏輯同原本，但移除了重複的宣告)
+        if (Auth::check()) {
             $user = Auth::user();
             $cart = $user->cart ?? $user->cart()->create();
 
@@ -77,7 +113,6 @@ class CartService
                 ]);
             }
         } else {
-            // Session 模式
             $cart = Session::get('cart', []);
             if (isset($cart[$variantId])) {
                 $cart[$variantId] += $quantity;
@@ -96,6 +131,15 @@ class CartService
             return;
         }
 
+        // 1. 檢查庫存
+        $variant = ProductVariant::find($variantId);
+        if (!$variant) throw new Exception('商品不存在');
+
+        if ($quantity > $variant->stock) {
+            throw new Exception("庫存不足！該商品目前僅剩 {$variant->stock} 件。");
+        }
+
+        // 2. 執行更新
         if (Auth::check()) {
             $user = Auth::user();
             if ($user->cart) {
@@ -133,6 +177,13 @@ class CartService
         } else {
             Session::forget('cart');
         }
+    }
+
+    // 取得特定規格在購物車目前的數量
+    public function quantityOf($variantId)
+    {
+        $content = $this->getContent();
+        return $content[$variantId] ?? 0;
     }
 
     // 合併購物車 (登入時呼叫)

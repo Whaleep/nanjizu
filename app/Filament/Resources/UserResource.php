@@ -57,9 +57,9 @@ class UserResource extends Resource
                     Forms\Components\TextInput::make('password')
                         ->label('密碼')
                         ->password()
-                        ->dehydrateStateUsing(fn ($state) => Hash::make($state))
-                        ->dehydrated(fn ($state) => filled($state))
-                        ->required(fn (string $operation): bool => $operation === 'create')
+                        ->dehydrateStateUsing(fn($state) => Hash::make($state))
+                        ->dehydrated(fn($state) => filled($state))
+                        ->required(fn(string $operation): bool => $operation === 'create')
                         ->maxLength(255)
                         ->helperText('若不修改密碼請留空'),
                 ])->columns(2),
@@ -91,12 +91,12 @@ class UserResource extends Resource
                 Tables\Columns\TextColumn::make('role')
                     ->label('身分')
                     ->badge()
-                    ->formatStateUsing(fn (string $state): string => match ($state) {
+                    ->formatStateUsing(fn(string $state): string => match ($state) {
                         'admin' => '管理員',
                         'customer' => '會員',
                         default => $state,
                     })
-                    ->color(fn (string $state): string => match ($state) {
+                    ->color(fn(string $state): string => match ($state) {
                         'admin' => 'danger',   // 紅色：管理員
                         'customer' => 'success', // 綠色：會員
                         default => 'gray',
@@ -137,7 +137,7 @@ class UserResource extends Resource
     public static function getRelations(): array
     {
         return [
-            //
+            RelationManagers\OrdersRelationManager::class,
         ];
     }
 

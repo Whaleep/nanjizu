@@ -7,36 +7,72 @@ import axios from 'axios';
 const props = defineProps({
     cartItems: Array,
     subtotal: Number, // 改名：原本的 total 變成 subtotal
-    discount: Number, // 新增
-    total: Number,    // 新增
-    appliedCoupon: String, // 新增
+    discount: Number,
+    total: Number,
+    appliedCoupon: String,
 });
 
 // 本地狀態
 const couponCode = ref('');
 const couponMessage = ref('');
 const isCouponLoading = ref(false);
+const toast = ref({
+    visible: false,
+    message: ''
+});
 
 const formatPrice = (price) => new Intl.NumberFormat('zh-TW').format(price);
 
+const showToast = (message) => {
+    toast.value.message = message;
+    toast.value.visible = true;
+    setTimeout(() => {
+        toast.value.visible = false;
+    }, 5000); // 5秒後消失
+};
+
 // 更新數量
-const updateQuantity = async (variantId, qty) => {
-    if (qty < 1) return;
+const updateQuantity = async (variantId, newQty) => {
+    if (newQty < 1) return;
     try {
-        await axios.post('/cart/update', { variant_id: variantId, quantity: qty });
+        const response = await axios.post('/cart/update', {
+            variant_id: variantId,
+            quantity: newQty
+        });
+        // await axios.post('/cart/update', { variant_id: variantId, quantity: qty });
         // 重新載入頁面資料 (Inertia 方式)
-        router.reload({ only: ['cartItems', 'subtotal', 'total', 'cartCount'] });
+        // router.reload({ only: ['cartItems', 'subtotal', 'total', 'cartCount'] });
+        // document.getElementById('subtotal-' + variantId).innerText = response.data.itemSubtotal;
+        // Inertia 會重新抓取資料，Vue 會自動更新畫面上的小計與總金額
+        router.reload({ only: ['cartItems', 'subtotal', 'discount', 'total', 'cartCount'] });
+        // 更新 Navbar 紅點
+        window.dispatchEvent(new CustomEvent('cart-updated', { detail: { count: response.data.cartCount } }));
+        // 顯示提示
+        showToast('已更新數量');
+
     } catch (error) {
-        alert('更新失敗: ' + (error.response?.data?.message || '未知錯誤'));
+        // alert('更新失敗: ' + (error.response?.data?.message || '未知錯誤'));
+        // 失敗邏輯
+        const msg = error.response?.data?.message || '更新失敗';
+        // 1. 顯示錯誤提示 (使用您之前寫的 showToast 或 alert)
+        // 建議用 alert 比較強烈，或者用紅色的 Toast
+        alert(msg);
+
+        // 2. 因為這是 v-for 迴圈生成的 input，直接操作 DOM 還原數值比較麻煩
+        // 最簡單暴力的方法：重新整理頁面，讓數據回到正確狀態
+        // 或者使用 router.reload()
+        router.reload();
     }
 };
 
 // 移除商品
 const removeItem = async (variantId) => {
-    if (!confirm('確定移除?')) return;
+    if (!confirm('確定要移除此商品嗎?')) return;
     try {
         await axios.post('/cart/remove', { variant_id: variantId });
         router.reload();
+        window.dispatchEvent(new CustomEvent('cart-updated', { detail: { count: response.data.cartCount } }));
+        showToast('商品已移除');
     } catch (error) {
         alert('移除失敗');
     }
@@ -75,6 +111,22 @@ const removeCoupon = async () => {
 <template>
     <Head title="購物車" />
     <MainLayout>
+
+        <!-- Toast 通知元件 -->
+        <transition
+            enter-active-class="transition ease-out duration-300"
+            enter-from-class="transform opacity-0 translate-y-2"
+            enter-to-class="transform opacity-100 translate-y-0"
+            leave-active-class="transition ease-in duration-200"
+            leave-from-class="transform opacity-100 translate-y-0"
+            leave-to-class="transform opacity-0 translate-y-2"
+        >
+            <div v-if="toast.visible" class="fixed top-20 right-4 z-50 bg-gray-800 text-white px-6 py-3 rounded-lg shadow-xl flex items-center gap-3">
+                <svg class="w-5 h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                <span class="font-medium">{{ toast.message }}</span>
+            </div>
+        </transition>
+
         <div class="container mx-auto px-4 py-12">
             <h1 class="text-3xl font-bold mb-8 flex items-center gap-2"><span>🛒</span> 您的購物車</h1>
 

@@ -1,7 +1,6 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\V1;
 use App\Http\Controllers\V2;
 use App\Http\Controllers\PageController;
 use App\Http\Controllers\PaymentController;
@@ -9,11 +8,12 @@ use App\Http\Controllers\AuthController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\WishlistController;
 use App\Http\Controllers\ReviewController;
-use App\Models\Post;
-use App\Models\Store;
+use App\Http\Controllers\OrderTrackingController;
+use App\Http\Controllers\Admin\OrderController as AdminOrderController;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Http;
 use Inertia\Inertia;
+
 
 /*
 |--------------------------------------------------------------------------
@@ -64,20 +64,24 @@ Route::get('/shop/category/{slug}', [V2\ShopController::class, 'category'])->nam
 Route::get('/shop/product/{slug}', [V2\ShopController::class, 'product'])->name('shop.product');
 
 // 購物車頁面
-Route::get('/cart', [V2\CartController::class, 'index'])->name('cart.index');
-// 購物車 APIs (Vue Axios 呼叫這些)
-Route::get('/cart/count', [V2\CartController::class, 'count'])->name('cart.count');
-Route::post('/cart/add', [V2\CartController::class, 'add'])->name('cart.add');
-Route::post('/cart/update', [V2\CartController::class, 'update'])->name('cart.update');
-Route::post('/cart/remove', [V2\CartController::class, 'remove'])->name('cart.remove');
-Route::post('/cart/coupon', [V2\CartController::class, 'applyCoupon'])->name('cart.coupon.apply');
-Route::delete('/cart/coupon', [V2\CartController::class, 'removeCoupon'])->name('cart.coupon.remove');
+Route::prefix('cart')->name('cart.')->group(function () {
+    Route::get('/', [V2\CartController::class, 'index'])->name('index');
+    // APIs (Vue Axios 呼叫這些)
+    Route::get('/count', [V2\CartController::class, 'count'])->name('count');
+    Route::post('/add', [V2\CartController::class, 'add'])->name('add');
+    Route::post('/update', [V2\CartController::class, 'update'])->name('update');
+    Route::post('/remove', [V2\CartController::class, 'remove'])->name('remove');
+    Route::post('/coupon', [V2\CartController::class, 'applyCoupon'])->name('coupon.apply');
+    Route::delete('coupon', [V2\CartController::class, 'removeCoupon'])->name('coupon.remove');
+});
 
-// Route::get('/checkout', [CheckoutController::class, 'indexV2'])->name('checkout.index');
-// Route::get('/checkout/success/{id}', [CheckoutController::class, 'successV2'])->name('checkout.success');
 Route::get('/checkout', [V2\CheckoutController::class, 'index'])->name('checkout.index');
 Route::post('/checkout', [V2\CheckoutController::class, 'store'])->name('checkout.store');
 Route::get('/checkout/success/{id}', [V2\CheckoutController::class, 'success'])->name('checkout.success');
+
+// 訪客訂單查詢
+Route::get('/tracking', [OrderTrackingController::class, 'index'])->name('tracking.index');
+Route::post('/tracking', [OrderTrackingController::class, 'search'])->name('tracking.search');
 
 // Auth Routes (只給未登入者)
 Route::middleware('guest')->group(function () {
@@ -88,79 +92,25 @@ Route::middleware('guest')->group(function () {
 });
 
 // 會員專區 (需登入)
-Route::middleware(['auth'])->prefix('dashboard')->name('dashboard.')->group(function () {
-    Route::get('/', [DashboardController::class, 'index'])->name('index');
-    Route::get('/orders', [DashboardController::class, 'orders'])->name('orders');
-    Route::get('/orders/{orderNumber}', [DashboardController::class, 'orderDetail'])->name('orders.show');
-    Route::get('/profile', [DashboardController::class, 'profile'])->name('profile');
-    Route::post('/profile', [DashboardController::class, 'updateProfile'])->name('profile.update');
-    Route::get('/wishlist', [WishlistController::class, 'index'])->name('wishlist');
-});
-
 Route::middleware(['auth'])->group(function () {
+    // 買家評論、 切換收藏 (API)、登出
     Route::post('/reviews', [ReviewController::class, 'store'])->name('reviews.store');
+    Route::post('/wishlist/toggle', [WishlistController::class, 'toggle'])->name('wishlist.toggle');
+    Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
+
+    Route::prefix('dashboard')->name('dashboard.')->group(function () {
+        Route::get('/', [DashboardController::class, 'index'])->name('index');
+        Route::get('/orders', [DashboardController::class, 'orders'])->name('orders');
+        Route::get('/orders/{orderNumber}', [DashboardController::class, 'orderDetail'])->name('orders.show');
+        Route::get('/profile', [DashboardController::class, 'profile'])->name('profile');
+        Route::post('/profile', [DashboardController::class, 'updateProfile'])->name('profile.update');
+        Route::get('/wishlist', [WishlistController::class, 'index'])->name('wishlist');
+    });
 });
 
-
-// 切換收藏 (API)
-Route::post('/wishlist/toggle', [WishlistController::class, 'toggle'])->name('wishlist.toggle')->middleware('auth');
-
-// Logout (需登入)
-Route::post('/logout', [AuthController::class, 'logout'])->name('logout')->middleware('auth');
-
-
-/*
-|--------------------------------------------------------------------------
-| V1 Routes (Blade) - 舊版備份
-|--------------------------------------------------------------------------
-*/
-
-Route::prefix('v1')->name('v1.')->group(function () {
-
-    // 首頁
-    Route::get('/', [V1\HomeController::class, 'index'])->name('home');
-    Route::get('/second-hand', [V1\HomeController::class, 'secondHand'])->name('second-hand.index');
-    Route::get('/about', function () {
-        return view('pages.about');
-    })->name('about');
-
-    // 簡單展示分店列表
-
-    // 簡單展示文章
-    Route::get('/news', [V1\PostController::class, 'news'])->name('news.index');
-    Route::get('/cases', [V1\PostController::class, 'cases'])->name('cases.index');
-    Route::get('/posts/{slug}', [V1\PostController::class, 'show'])->name('posts.show');
-
-    // 報價與預約路由
-    Route::get('/repair', [V1\RepairController::class, 'index'])->name('repair.index');
-    Route::get('/repair/{id}', [V1\RepairController::class, 'show'])->name('repair.show');
-    Route::post('/inquiry', [V1\RepairController::class, 'storeInquiry'])->name('inquiry.store');
-
-    // 靜態與分店列表
-    Route::get('/second-hand', [V1\HomeController::class, 'secondHand'])->name('second-hand.index');
-    Route::get('/process', function () {
-        return view('pages.process');
-    })->name('process');
-    Route::get('/stores', function () {
-        $stores = Store::where('is_active', true)->get();
-        return view('stores.index', compact('stores'));
-    })->name('stores.index');
-
-    // 商店路由
-    Route::get('/shop', [V1\ShopController::class, 'index'])->name('shop.index');
-    Route::get('/shop/category/{slug}', [V1\ShopController::class, 'category'])->name('shop.category');
-    Route::get('/shop/product/{slug}', [V1\ShopController::class, 'product'])->name('shop.product');
-
-    // 購物車路由
-    Route::get('/cart', [V1\CartController::class, 'index'])->name('cart.index');
-    Route::post('/cart/add', [V1\CartController::class, 'add'])->name('cart.add');
-    Route::post('/cart/update', [V1\CartController::class, 'update'])->name('cart.update');
-    Route::post('/cart/remove', [V1\CartController::class, 'remove'])->name('cart.remove');
-
-    // 結帳路由
-    Route::get('/checkout', [V1\CheckoutController::class, 'index'])->name('checkout.index');
-    Route::post('/checkout', [V1\CheckoutController::class, 'store'])->name('checkout.store');
-    Route::get('/checkout/success/{id}', [V1\CheckoutController::class, 'success'])->name('checkout.success');
+// 後台管理路由群組 (後台專屬非 Filament 功能)
+Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(function () {
+    Route::get('/orders/{order}/print', [AdminOrderController::class, 'print'])->name('orders.print');
 });
 
 // 共用 API 不分版本
@@ -168,32 +118,20 @@ Route::prefix('v1')->name('v1.')->group(function () {
 Route::post('/payment/callback', [PaymentController::class, 'callback'])->name('payment.callback');
 
 // 用 webhook 取得 line User ID
-// Route::post('/line/webhook', function (\Illuminate\Http\Request $request) {
-//     // 1. 驗證請求 (簡單略過簽章驗證，直接取資料)
-//     $events = $request->input('events', []);
+Route::post('/line/webhook', [\App\Http\Controllers\WebhookController::class, 'handleLineCallback'])->name('webhook.line');
 
-//     foreach ($events as $event) {
-//         // 當有人傳訊息進來
-//         if ($event['type'] === 'message' && $event['message']['type'] === 'text') {
+/*
+|--------------------------------------------------------------------------
+| V1 Routes Loading blades
+|--------------------------------------------------------------------------
+*/
+Route::prefix('v1')
+    ->name('v1.')
+    ->group(base_path('routes/blades.php'));
 
-//             $userId = $event['source']['userId']; // 抓到 User ID 了！
-//             $replyToken = $event['replyToken'];
-
-//             // 2. 回覆 User ID 給使用者
-//             Http::withToken(env('LINE_CHANNEL_ACCESS_TOKEN'))
-//                 ->post('https://api.line.me/v2/bot/message/reply', [
-//                     'replyToken' => $replyToken,
-//                     'messages' => [
-//                         [
-//                             'type' => 'text',
-//                             'text' => "您的 User ID 是：\n" . $userId . \\ "\n\n請將此 ID 複製到 .env 的 LINE_ADMIN_USER_ID 欄位中。"
-//                         ]
-//                     ]
-//                 ]);
-//         }
-//     }
-
-//     return response('OK', 200);
-// });
-
+/*
+|--------------------------------------------------------------------------
+| Static Pages (放在最後以免攔截)
+|--------------------------------------------------------------------------
+*/
 Route::get('/{slug}', [PageController::class, 'showV2'])->name('page.show');

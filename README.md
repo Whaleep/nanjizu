@@ -74,6 +74,9 @@ php artisan serve
 hero-bg.jpg 建議寬度 1920px，要壓縮
 logo.png 
 
+php artisan ide-helper:generate
+php artisan ide-helper:meta
+
 sitemap.xml 上傳根目錄，Google Search Console 提交
 -->
 

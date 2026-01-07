@@ -8,6 +8,8 @@ use App\Models\ProductVariant;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Exception;
+use Illuminate\Support\Facades\Mail;
+use App\Mail\OrderCreated;
 
 class CheckoutService
 {
@@ -99,6 +101,15 @@ class CheckoutService
             } catch (Exception $e) {
                 // Line 發送失敗不應影響訂單成立，紀錄 Log 即可
                 \Illuminate\Support\Facades\Log::error('Line 通知失敗: ' . $e->getMessage());
+            }
+
+            // 發送 Email (如果客戶有填 Email)
+            if ($data['customer_email']) {
+                try {
+                    Mail::to($data['customer_email'])->send(new OrderCreated($order));
+                } catch (\Exception $e) {
+                    \Illuminate\Support\Facades\Log::error('郵件發送失敗: ' . $e->getMessage());
+                }
             }
 
             return $order;

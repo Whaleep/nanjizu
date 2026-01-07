@@ -15,7 +15,7 @@ const getMinPrice = (variants) => variants.length ? Math.min(...variants.map(v =
         <div v-if="products.data.length > 0" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
             <div v-for="product in products.data" :key="product.id" class="bg-white border rounded-lg overflow-hidden hover:shadow-lg transition group">
                 <Link :href="`/shop/product/${product.slug}`" class="block aspect-square bg-gray-100 relative">
-                    <img v-if="product.image" :src="`/storage/${product.image}`" class="w-full h-full object-cover">
+                    <img v-if="product.primary_image" :src="`/storage/${product.primary_image}`" class="w-full h-full object-cover">
                     <div v-else class="w-full h-full flex items-center justify-center text-gray-400">No Image</div>
                 </Link>
                 <div class="p-4">

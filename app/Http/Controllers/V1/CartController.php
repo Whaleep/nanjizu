@@ -33,15 +33,25 @@ class CartController extends Controller
             'quantity' => 'required|integer|min:1',
         ]);
 
-        // 檢查庫存 (簡單檢查)
-        $variant = ProductVariant::find($request->variant_id);
-        if ($variant->stock < $request->quantity) {
-            return back()->with('error', '庫存不足！');
+        try {
+            // 呼叫 Service，如果有問題會 throw Exception
+            $this->cartService->add($request->variant_id, $request->quantity);
+            // 成功回傳
+            return back()->with('success', '已加入購物車！');
+        } catch (\Exception $e) {
+            // 失敗捕捉
+            return back()->with('error', $e->getMessage());
         }
 
-        $this->cartService->add($request->variant_id, $request->quantity);
+        // 檢查庫存 (簡單檢查)
+        // $variant = ProductVariant::find($request->variant_id);
+        // if ($variant->stock < $request->quantity) {
+        //     return back()->with('error', '庫存不足！');
+        // }
 
-        return back()->with('success', '已加入購物車！');
+        // $this->cartService->add($request->variant_id, $request->quantity);
+
+        // return back()->with('success', '已加入購物車！');
     }
 
     // 更新 (Form Post -> Redirect)
@@ -52,14 +62,13 @@ class CartController extends Controller
             'quantity' => 'required|integer|min:1',
         ]);
 
-        $variant = ProductVariant::find($request->variant_id);
-        if (!$variant || $variant->stock < $request->quantity) {
-            return back()->with('error', '庫存不足');
+        try {
+            // 回傳成功資料
+            $this->cartService->update($request->variant_id, $request->quantity);
+            return back()->with('success', '購物車已更新');
+        } catch (\Exception $e) {
+            return back()->with('error', $e->getMessage());
         }
-
-        $this->cartService->update($request->variant_id, $request->quantity);
-
-        return back()->with('success', '購物車已更新');
     }
 
     // 移除 (Form Post -> Redirect)

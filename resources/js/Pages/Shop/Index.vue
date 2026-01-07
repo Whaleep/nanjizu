@@ -2,6 +2,7 @@
 import { ref } from 'vue'; // 引入 ref
 import { Head, Link, router } from '@inertiajs/vue3';
 import ShopLayout from '@/Layouts/ShopLayout.vue';
+import ProductCard from '@/Components/Shop/ProductCard.vue';    // 引入商品卡片元件
 
 const props = defineProps({
     products: Object,
@@ -76,18 +77,7 @@ const getPriceDisplay = (variants) => {
 
             <!-- 4. 商品列表 (保持不變) -->
             <div v-if="products.data.length > 0" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-                <div v-for="product in products.data" :key="product.id" class="bg-white border rounded-xl overflow-hidden hover:shadow-lg transition group">
-                    <Link :href="`/shop/product/${product.slug}`" class="block aspect-square bg-gray-100 overflow-hidden relative">
-                        <img v-if="product.image" :src="`/storage/${product.image}`" class="w-full h-full object-cover group-hover:scale-105 transition duration-500">
-                        <div v-else class="flex items-center justify-center w-full h-full text-gray-400">無圖</div>
-                    </Link>
-                    <div class="p-4">
-                        <h3 class="font-bold text-lg mb-2 group-hover:text-blue-600 line-clamp-2">
-                            <Link :href="`/shop/product/${product.slug}`">{{ product.name }}</Link>
-                        </h3>
-                        <p class="text-red-600 font-bold">{{ getPriceDisplay(product.variants) }}</p>
-                    </div>
-                </div>
+                <ProductCard v-for="product in products.data" :key="product.id" :product="product" />
             </div>
 
             <div v-else class="py-20 text-center bg-white rounded-lg border border-dashed">

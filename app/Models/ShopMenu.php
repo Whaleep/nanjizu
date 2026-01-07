@@ -11,7 +11,7 @@ class ShopMenu extends Model
     protected $guarded = [];
 
     // 自動附加 link 屬性到 JSON
-    protected $appends = ['link'];
+    protected $appends = ['link', 'category_children'];
 
     // 存取器：自動計算最終連結
     public function getLinkAttribute()
@@ -32,5 +32,18 @@ class ShopMenu extends Model
         }
 
         return '#';
+    }
+
+    // 新增：取得子分類 (如果是 Category 類型)
+    public function getCategoryChildrenAttribute()
+    {
+        if ($this->type === 'category') {
+            $category = ShopCategory::with(['children' => function($q) {
+                $q->where('is_visible', true)->orderBy('sort_order');
+            }])->find($this->target_id);
+
+            return $category ? $category->children : [];
+        }
+        return [];
     }
 }

@@ -51,20 +51,39 @@ class CartController extends Controller
             'quantity' => 'required|integer|min:1',
         ]);
 
-        $variant = ProductVariant::find($request->variant_id);
+        try {
+            // 呼叫 Service，如果有問題會 throw Exception
+            $this->cartService->add($request->variant_id, $request->quantity);
 
-        // API 錯誤回傳 400 狀態碼
-        if ($variant->stock < $request->quantity) {
-            return response()->json(['success' => false, 'message' => '庫存不足'], 400);
+            // 成功回傳
+            return response()->json([
+                'success' => true,
+                'message' => '已加入購物車',
+                'cartCount' => $this->cartService->count(),
+            ]);
+        } catch (\Exception $e) {
+            // 失敗捕捉
+            // 回傳 400 錯誤碼與錯誤訊息
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage()
+            ], 400);
         }
 
-        $this->cartService->add($request->variant_id, $request->quantity);
+        // $variant = ProductVariant::find($request->variant_id);
 
-        return response()->json([
-            'success' => true,
-            'message' => '已加入購物車',
-            'cartCount' => $this->cartService->count(),
-        ]);
+        // // API 錯誤回傳 400 狀態碼
+        // if ($variant->stock < $request->quantity) {
+        //     return response()->json(['success' => false, 'message' => '庫存不足'], 400);
+        // }
+
+        // $this->cartService->add($request->variant_id, $request->quantity);
+
+        // return response()->json([
+        //     'success' => true,
+        //     'message' => '已加入購物車',
+        //     'cartCount' => $this->cartService->count(),
+        // ]);
     }
 
     // API: 更新 (Return JSON)
@@ -75,25 +94,25 @@ class CartController extends Controller
             'quantity' => 'required|integer|min:1',
         ]);
 
-        $variant = ProductVariant::find($request->variant_id);
+        try {
+            $this->cartService->update($request->variant_id, $request->quantity);
 
-        if (!$variant || $variant->stock < $request->quantity) {
-            return response()->json(['success' => false, 'message' => '庫存不足'], 400);
+            // 回傳成功資料
+            $variant = \App\Models\ProductVariant::find($request->variant_id);
+            $itemSubtotal = $variant->price * $request->quantity;
+            return response()->json([
+                'success' => true,
+                'itemSubtotal' => number_format($itemSubtotal),
+                'total' => number_format($this->cartService->total()),
+                'cartCount' => $this->cartService->count(),
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage()
+            ], 400);
         }
-
-        $this->cartService->update($request->variant_id, $request->quantity);
-
-        // 回傳前端需要的最新計算數據
-        $itemSubtotal = $variant->price * $request->quantity;
-
-        return response()->json([
-            'success' => true,
-            'itemSubtotal' => number_format($itemSubtotal),
-            'subtotal' => number_format($this->cartService->subtotal()),
-            'discount' => number_format($this->cartService->discountAmount()),
-            'total' => number_format($this->cartService->total()),
-            'cartCount' => $this->cartService->count(),
-        ]);
     }
 
     // API: 移除 (Return JSON)

@@ -1,6 +1,7 @@
 <script setup>
 import { Head, Link } from '@inertiajs/vue3';
 import ShopLayout from '@/Layouts/ShopLayout.vue';
+import ProductCard from '@/Components/Shop/ProductCard.vue'; // 引入商品卡片元件
 
 const props = defineProps({
     category: Object,
@@ -68,16 +69,10 @@ const getMinPrice = (variants) => variants.length ? Math.min(...variants.map(v =
 
         <!-- 商品列表 -->
         <div v-if="products.data.length > 0" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
-            <div v-for="product in products.data" :key="product.id" class="bg-white border rounded-xl overflow-hidden hover:shadow-lg transition group">
-                <Link :href="`/shop/product/${product.slug}`" class="block aspect-square bg-gray-100 overflow-hidden relative">
-                    <img v-if="product.image" :src="`/storage/${product.image}`" class="w-full h-full object-cover group-hover:scale-105 transition duration-500">
-                    <div v-else class="flex items-center justify-center w-full h-full text-gray-400">無圖</div>
-                </Link>
-                <div class="p-4">
-                    <h3 class="font-bold text-lg mb-2 group-hover:text-blue-600">{{ product.name }}</h3>
-                    <p class="text-red-600 font-bold">NT$ {{ formatPrice(getMinPrice(product.variants)) }} 起</p>
-                </div>
-            </div>
+            <template v-for="product in products.data" :key="product.id">
+                <!-- 直接使用元件 -->
+                <ProductCard :product="product" />
+            </template>
         </div>
         <div v-else class="text-center py-10 text-gray-500">此分類暫無商品。</div>
 

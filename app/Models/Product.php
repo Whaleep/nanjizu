@@ -20,6 +20,26 @@ class Product extends Model
         'content' => 'array',
     ];
 
+    // 自動附加這個虛擬欄位到 JSON
+    protected $appends = ['primary_image'];
+
+        // === 新增：定義 primary_image 邏輯 ===
+    public function getPrimaryImageAttribute()
+    {
+        // 1. 優先讀取新的多圖欄位 (取第一張)
+        if (!empty($this->images) && is_array($this->images) && count($this->images) > 0) {
+            return $this->images[0];
+        }
+
+        // 2. 如果新欄位沒資料，回退讀取舊欄位 (相容舊資料)
+        if (!empty($this->image)) {
+            return $this->image;
+        }
+
+        // 3. 都沒有就回傳 null
+        return null;
+    }
+    
     public function category(): BelongsTo
     {
         return $this->belongsTo(ShopCategory::class, 'shop_category_id');

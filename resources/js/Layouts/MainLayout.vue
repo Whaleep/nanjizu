@@ -202,10 +202,11 @@ onUnmounted(() => {
                     <div>
                         <h4 class="text-white text-lg font-bold mb-4">快速連結</h4>
                         <ul class="space-y-2 text-sm text-gray-400">
-                            <li><Link href="/repair" class="hover:text-white transition">維修價格查詢</Link></li>
-                            <li><Link href="/shop" class="hover:text-white transition">線上商店</Link></li>
+                            <!-- <li><Link href="/repair" class="hover:text-white transition">維修價格查詢</Link></li> -->
+                            <!-- <li><Link href="/shop" class="hover:text-white transition">線上商店</Link></li> -->
                             <li><Link href="/process" class="hover:text-white transition">送修流程說明</Link></li>
                             <li><Link href="/about" class="hover:text-white transition">關於我們</Link></li>
+                            <li><Link href="/tracking" class="hover:text-white font-bold text-blue-400">訂單查詢</Link></li>
                         </ul>
                     </div>
 
