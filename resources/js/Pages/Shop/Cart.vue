@@ -3,12 +3,13 @@ import { ref } from 'vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import MainLayout from '@/Layouts/MainLayout.vue';
 import axios from 'axios';
+import ProductListCard from '@/Components/Shop/ProductListCard.vue';
 
 const props = defineProps({
     cartItems: Array,
-    subtotal: Number, // 改名：原本的 total 變成 subtotal
+    subtotal: Number,   // 折扣前
     discount: Number,
-    total: Number,
+    total: Number,      // 折扣後
     appliedCoupon: String,
 });
 
@@ -39,10 +40,6 @@ const updateQuantity = async (variantId, newQty) => {
             variant_id: variantId,
             quantity: newQty
         });
-        // await axios.post('/cart/update', { variant_id: variantId, quantity: qty });
-        // 重新載入頁面資料 (Inertia 方式)
-        // router.reload({ only: ['cartItems', 'subtotal', 'total', 'cartCount'] });
-        // document.getElementById('subtotal-' + variantId).innerText = response.data.itemSubtotal;
         // Inertia 會重新抓取資料，Vue 會自動更新畫面上的小計與總金額
         router.reload({ only: ['cartItems', 'subtotal', 'discount', 'total', 'cartCount'] });
         // 更新 Navbar 紅點
@@ -51,7 +48,6 @@ const updateQuantity = async (variantId, newQty) => {
         showToast('已更新數量');
 
     } catch (error) {
-        // alert('更新失敗: ' + (error.response?.data?.message || '未知錯誤'));
         // 失敗邏輯
         const msg = error.response?.data?.message || '更新失敗';
         // 1. 顯示錯誤提示 (使用您之前寫的 showToast 或 alert)
@@ -69,7 +65,7 @@ const updateQuantity = async (variantId, newQty) => {
 const removeItem = async (variantId) => {
     if (!confirm('確定要移除此商品嗎?')) return;
     try {
-        await axios.post('/cart/remove', { variant_id: variantId });
+        const response = await axios.post('/cart/remove', { variant_id: variantId });
         router.reload();
         window.dispatchEvent(new CustomEvent('cart-updated', { detail: { count: response.data.cartCount } }));
         showToast('商品已移除');
@@ -131,45 +127,52 @@ const removeCoupon = async () => {
             <h1 class="text-3xl font-bold mb-8 flex items-center gap-2"><span>🛒</span> 您的購物車</h1>
 
             <div v-if="cartItems.length > 0" class="flex flex-col lg:flex-row gap-10">
-                <!-- 列表 -->
-                <div class="lg:w-2/3 bg-white shadow rounded-lg overflow-hidden border">
-                    <table class="w-full text-left">
-                        <thead class="bg-gray-50 border-b">
-                            <tr>
-                                <th class="p-4 font-bold text-gray-600">商品</th>
-                                <th class="p-4 font-bold text-gray-600 hidden sm:table-cell">單價</th>
-                                <th class="p-4 font-bold text-gray-600 text-center">數量</th>
-                                <th class="p-4 font-bold text-gray-600 text-right">小計</th>
-                                <th class="p-4"></th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr v-for="item in cartItems" :key="item.variant_id" class="border-b last:border-0 hover:bg-gray-50">
-                                <td class="p-4">
-                                    <div class="flex items-center gap-4">
-                                        <div class="w-16 h-16 bg-gray-100 rounded border flex-shrink-0">
-                                            <img v-if="item.image" :src="`/storage/${item.image}`" class="w-full h-full object-cover">
-                                            <div v-else class="w-full h-full flex items-center justify-center text-xs text-gray-400">無圖</div>
-                                        </div>
-                                        <div>
-                                            <div class="font-bold">{{ item.product_name }}</div>
-                                            <div class="text-sm text-gray-500">{{ item.variant_name }}</div>
-                                        </div>
+                <!-- 購物車列表 (左側) -->
+                <div class="lg:w-2/3 space-y-4">
+                    <template v-for="item in cartItems" :key="item.variant_id">
+                        
+                        <ProductListCard
+                            :image="item.image"
+                            :title="item.product_name"
+                            :subtitle="item.variant_name"
+                            :price="item.price"
+                            :link="`/shop/product/${item.product_slug}`"
+                        >
+                            <!-- 插槽：放入購物車專用的數量與移除按鈕 -->
+                            <template #actions>
+                                <div class="flex items-center justify-between sm:justify-end gap-4 w-full">
+                                    
+                                    <!-- 數量調整器 -->
+                                    <div class="flex items-center border border-gray-300 rounded-lg bg-white h-8 md:h-10">
+                                        <button @click="updateQuantity(item.variant_id, item.quantity - 1)" 
+                                                class="px-2 md:px-3 text-gray-500 hover:bg-gray-100 h-full rounded-l-lg transition">-</button>
+                                        
+                                        <input type="number" 
+                                            :value="item.quantity" 
+                                            @change="updateQuantity(item.variant_id, $event.target.value)"
+                                            class="w-10 md:w-12 text-center text-sm border-none focus:ring-0 p-0 h-full appearance-none">
+                                        
+                                        <button @click="updateQuantity(item.variant_id, item.quantity + 1)" 
+                                                :disabled="item.quantity >= item.stock"
+                                                class="px-2 md:px-3 text-gray-500 hover:bg-gray-100 h-full rounded-r-lg transition disabled:opacity-50">+</button>
                                     </div>
-                                </td>
-                                <td class="p-4 text-gray-700 hidden sm:table-cell">NT$ {{ formatPrice(item.price) }}</td>
-                                <td class="p-4 text-center">
-                                    <input type="number" :value="item.quantity" min="1" :max="item.stock"
-                                           @change="updateQuantity(item.variant_id, $event.target.value)"
-                                           class="w-16 border rounded text-center py-1">
-                                </td>
-                                <td class="p-4 text-right font-bold text-gray-900">NT$ {{ formatPrice(item.subtotal) }}</td>
-                                <td class="p-4 text-right">
-                                    <button @click="removeItem(item.variant_id)" class="text-red-500 hover:text-red-700 text-sm font-bold">移除</button>
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
+
+                                    <!-- 小計與移除 -->
+                                    <div class="flex flex-col items-end gap-1">
+                                        <span class="text-sm font-bold text-gray-900 md:hidden">
+                                            小計: NT$ <span :id="`subtotal-${item.variant_id}`">{{ formatPrice(item.subtotal) }}</span>
+                                        </span>
+                                        
+                                        <button @click="removeItem(item.variant_id)" 
+                                                class="text-xs md:text-sm text-gray-400 hover:text-red-500 underline decoration-dotted transition">
+                                            移除
+                                        </button>
+                                    </div>
+                                </div>
+                            </template>
+                        </ProductListCard>
+
+                    </template>
                 </div>
 
                 <!-- 結帳區 -->

@@ -1,19 +1,26 @@
 <!-- 商品卡片元件 -->
 <script setup>
 import { ref, computed } from 'vue';
-import { Link } from '@inertiajs/vue3';
+import { Link, usePage } from '@inertiajs/vue3';
 import axios from 'axios';
 
 const props = defineProps({
-    product: Object
+    product: Object,
+    showAction: {
+        type: Boolean,
+        default: true
+    }
 });
 
-// 1. 初始化狀態
+// 初始化狀態
 // 預設選第一個有庫存的規格，如果都沒有就選第一個
 const defaultVariant = props.product.variants.find(v => v.stock > 0) || props.product.variants[0] || {};
 const selectedVariant = ref(defaultVariant);
 const quantity = ref(1);
 const isLoading = ref(false);
+
+// 使用 ref 並從 props 初始化收藏狀態
+const isWishlisted = ref(props.product.is_wishlisted || false);
 
 // 動態圖片邏輯
 const displayImage = computed(() => {
@@ -31,7 +38,7 @@ const displayImage = computed(() => {
 
 const formatPrice = (price) => new Intl.NumberFormat('zh-TW').format(price);
 
-// 2. 加入購物車邏輯
+// 加入購物車邏輯
 const addToCart = async () => {
     if (!selectedVariant.value.id || selectedVariant.value.stock <= 0) return;
 
@@ -64,6 +71,27 @@ const addToCart = async () => {
         // quantity.value = 1; // 建議：失敗時不要重置數量，讓使用者知道他剛剛填了多少
     }
 };
+
+// 切換收藏
+const toggleWishlist = async () => {
+    const page = usePage();
+    const user = page.props.auth.user;
+
+    if (!user) {
+        if(confirm('收藏商品需要先登入會員，是否前往登入？')) {
+            window.location.href = '/login';
+        }
+        return;
+    }
+
+    try {
+        const response = await axios.post('/wishlist/toggle', { product_id: props.product.id });
+        isWishlisted.value = response.data.is_wishlisted;
+    } catch (error) {
+        console.error(error);
+        alert('操作失敗，請稍後再試');
+    }
+};
 </script>
 
 <template>
@@ -84,6 +112,21 @@ const addToCart = async () => {
             <div v-if="selectedVariant.stock <= 0" class="absolute inset-0 bg-black/50 flex items-center justify-center text-white font-bold tracking-wider">
                 補貨中
             </div>
+
+            <!-- 加入收藏按鈕 -->
+            <button @click.stop.prevent="toggleWishlist" 
+                    class="absolute bottom-3 right-3 w-9 h-9 flex items-center justify-center rounded-full bg-white/80 hover:bg-white text-gray-400 backdrop-blur-sm shadow-sm transition-all duration-300 group/wishlist"
+                    :class="{'text-red-500 bg-white': isWishlisted}">
+                <svg xmlns="http://www.w3.org/2000/svg" 
+                     :class="[isWishlisted ? 'fill-current' : 'fill-none stroke-current']"
+                     class="w-5 h-5 transition-transform duration-300 group-hover/wishlist:scale-110" 
+                     viewBox="0 0 24 24" 
+                     stroke-width="2" 
+                     stroke-linecap="round" 
+                     stroke-linejoin="round">
+                    <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+                </svg>
+            </button>
         </Link>
 
         <!-- 資訊與操作區 -->
@@ -100,44 +143,47 @@ const addToCart = async () => {
 
             <div class="mt-auto space-y-3">
 
-                <!-- A. 規格選擇 (下拉選單) -->
-                <div v-if="product.variants.length > 1">
-                    <select v-model="selectedVariant"
-                            class="w-full text-sm border rounded-lg border-gray-200 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 py-1 px-2">
-                        <template v-for="variant in product.variants" :key="variant.id">
-                            <option :value="variant" :disabled="variant.stock <= 0">
-                                {{ variant.name }} {{ variant.stock <= 0 ? '(缺貨)' : '' }}
-                            </option>
-                        </template>
-                    </select>
-                </div>
-                <!-- 單一規格顯示名稱 -->
-                <div v-else class="text-sm text-gray-500 truncate">
-                    規格：{{ selectedVariant.name || '單一規格' }}
-                </div>
-
-                <!-- B. 價格顯示 (單一價格) -->
+                <!-- 價格顯示 (任何模式都顯示) -->
                 <div class="text-red-600 font-bold text-lg">
-                    NT$ {{ formatPrice(selectedVariant.price || 0) }}
+                    NT$ {{ formatPrice(selectedVariant.price || product.price || 0) }}
                 </div>
 
-                <!-- C. 數量與購買按鈕 -->
-                <div class="flex gap-2">
-                    <!-- 數量輸入 -->
-                    <input type="number" v-model="quantity" min="1" :max="selectedVariant.stock"
-                           class="w-16 border border-gray-200 rounded-lg text-center text-sm py-2 px-1 focus:ring-blue-500 focus:border-blue-500"
-                           :disabled="selectedVariant.stock <= 0">
+                <!-- 操作區 (規格/數量/按鈕) - 受 showAction 控制 -->
+                <div v-if="showAction" class="space-y-3">
+                    <!-- 規格選擇 (下拉選單) -->
+                    <div v-if="product.variants && product.variants.length > 1">
+                        <select v-model="selectedVariant"
+                                class="w-full text-sm border rounded-lg border-gray-200 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 py-1 px-2">
+                            <template v-for="variant in product.variants" :key="variant.id">
+                                <option :value="variant" :disabled="variant.stock <= 0">
+                                    {{ variant.name }} {{ variant.stock <= 0 ? '(缺貨)' : '' }}
+                                </option>
+                            </template>
+                        </select>
+                    </div>
+                    <!-- 單一規格顯示名稱 -->
+                    <div v-else class="text-sm text-gray-500 truncate">
+                        規格：{{ selectedVariant.name || '單一規格' }}
+                    </div>
 
-                    <!-- 加入按鈕 -->
-                    <button @click="addToCart"
-                            :disabled="selectedVariant.stock <= 0 || isLoading"
-                            class="flex-1 bg-blue-600 text-white rounded-lg text-sm font-bold hover:bg-blue-700 transition disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center justify-center gap-1">
-                        <svg v-if="isLoading" class="animate-spin h-4 w-4" viewBox="0 0 24 24">
-                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                        <span :id="`btn-text-${product.id}`">加入購物車</span>
-                    </button>
+                    <!-- 數量與購買按鈕 -->
+                    <div class="flex gap-2 w-full">
+                        <!-- 數量輸入 -->
+                        <input type="number" v-model="quantity" min="1" :max="selectedVariant.stock"
+                            class="basis-5/12 flex-shrink-0 w-0 border border-gray-200 rounded-lg text-center text-sm py-2 px-1 focus:ring-blue-500 focus:border-blue-500"
+                            :disabled="selectedVariant.stock <= 0">
+
+                        <!-- 加入按鈕 -->
+                        <button @click="addToCart"
+                                :disabled="selectedVariant.stock <= 0 || isLoading"
+                                class="basis-5/12 flex-grow bg-gray-100 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-200 transition disabled:bg-gray-50 disabled:text-gray-400 disabled:cursor-not-allowed flex items-center justify-center gap-1">
+                            <svg v-if="isLoading" class="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            <span :id="`btn-text-${product.id}`">加入購物車</span>
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>

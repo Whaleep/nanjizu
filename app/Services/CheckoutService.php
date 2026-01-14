@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\ProductVariant;
+use App\Models\ShippingMethod;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Exception;
@@ -37,14 +38,44 @@ class CheckoutService
         }
 
         // 取得金額與優惠資訊
+        $productsTotal = $this->cartService->total();
         $discount = $this->cartService->discountAmount();
         $coupon = $this->cartService->getCoupon();
-        $finalTotal = $this->cartService->total();
+
+        // 計算運費
+        $shippingMethod = ShippingMethod::find($data['shipping_method_id']);
+        $shippingFee = $shippingMethod->fee;
+
+        // 檢查免運門檻
+        if ($shippingMethod->free_shipping_threshold && $productsTotal >= $shippingMethod->free_shipping_threshold) {
+            $shippingFee = 0;
+        }
+
+        // 計算最終總金額 (商品 + 運費)
+        $finalTotal = $productsTotal + $shippingFee;
+
+        // 準備訂單資料
+        $orderAttributes = [
+            'order_number' => 'ORD' . date('Ymd') . strtoupper(Str::random(5)),
+            'user_id' => auth()->id(),
+            'customer_name' => $data['customer_name'],
+            'customer_phone' => $data['customer_phone'],
+            'customer_email' => $data['customer_email'] ?? null,
+            'customer_address' => $data['customer_address'],
+            'notes' => $data['notes'] ?? null,
+            'total_amount' => $finalTotal,
+            'discount_amount' => $discount,
+            'coupon_code' => $coupon ? $coupon->code : null,
+            'shipping_method_name' => $shippingMethod->name,
+            'shipping_fee' => $shippingFee,
+            'payment_method' => $data['payment_method'],
+            'status' => 'pending',
+        ];
 
         // 開始資料庫交易
-        return DB::transaction(function () use ($data, $cartItems, $discount, $coupon, $finalTotal) {
+        $order = DB::transaction(function () use ($orderAttributes, $cartItems, $coupon) {
 
-            // 1. 檢查庫存並鎖定 (Lock For Update)
+            // 檢查庫存
             foreach ($cartItems as $item) {
                 $variant = ProductVariant::lockForUpdate()->find($item->variant_id);
 
@@ -53,23 +84,10 @@ class CheckoutService
                 }
             }
 
-            // 2. 建立訂單主檔
-            $order = Order::create([
-                'order_number' => 'ORD' . date('Ymd') . strtoupper(Str::random(5)),
-                'user_id' => auth()->id(),
-                'customer_name' => $data['customer_name'],
-                'customer_phone' => $data['customer_phone'],
-                'customer_email' => $data['customer_email'] ?? null,
-                'customer_address' => $data['customer_address'],
-                'payment_method' => $data['payment_method'],
-                'notes' => $data['notes'] ?? null,
-                'total_amount' => $finalTotal,
-                'discount_amount' => $discount,
-                'coupon_code' => $coupon ? $coupon->code : null,
-                'status' => 'pending',
-            ]);
+            // 建立訂單
+            $order = Order::create($orderAttributes);
 
-            // 3. 建立明細並扣庫存
+            // 建立明細並扣庫存
             foreach ($cartItems as $item) {
                 OrderItem::create([
                     'order_id' => $order->id,
@@ -87,32 +105,34 @@ class CheckoutService
                 $variant->product->increment('sold_count', $item->quantity);
             }
 
-            // 4. 增加優惠券使用次數
+            // 增加優惠券已使用次數
             if ($coupon) {
                 $coupon->increment('used_count');
             }
 
-            // 5. 清空購物車
+            // 清空購物車
             $this->cartService->clear();
-
-            // 6. 發送 Line 通知 (放在 Transaction 內或外皆可，這裡放裡面確保流程完整)
-            try {
-                $this->lineBotService->sendOrderNotification($order);
-            } catch (Exception $e) {
-                // Line 發送失敗不應影響訂單成立，紀錄 Log 即可
-                \Illuminate\Support\Facades\Log::error('Line 通知失敗: ' . $e->getMessage());
-            }
-
-            // 發送 Email (如果客戶有填 Email)
-            if ($data['customer_email']) {
-                try {
-                    Mail::to($data['customer_email'])->send(new OrderCreated($order));
-                } catch (\Exception $e) {
-                    \Illuminate\Support\Facades\Log::error('郵件發送失敗: ' . $e->getMessage());
-                }
-            }
 
             return $order;
         });
+
+        // DB 交易成功後才會發送通知
+        // 發送 Line 通知給賣家
+        try {
+            $this->lineBotService->sendOrderNotification($order);
+        } catch (Exception $e) {
+            \Illuminate\Support\Facades\Log::error('Line 通知失敗: ' . $e->getMessage());
+        }
+
+        // 發送 Email 給買家
+        if ($order->customer_email) {
+            try {
+                Mail::to($order->customer_email)->send(new OrderCreated($order));
+            } catch (\Exception $e) {
+                \Illuminate\Support\Facades\Log::error('郵件發送失敗: ' . $e->getMessage());
+            }
+        }
+
+        return $order;
     }
 }

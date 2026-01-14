@@ -1,0 +1,32 @@
+name: Manual Database Seed
+
+on:
+  workflow_dispatch:
+    inputs:
+      class:
+        description: "Specific Seeder Class (Optional, leave empty to run DatabaseSeeder)"
+        required: false
+        default: ""
+
+jobs:
+  seed:
+    name: 🌱 Run Seeder
+    runs-on: ubuntu-latest
+    steps:
+      - name: 🚀 Run Seeder via SSH
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USERNAME }}
+          password: ${{ secrets.SSH_PASSWORD }}
+          port: ${{ secrets.SSH_PORT }}
+          timeout: 60s
+          script: |
+            cd domains/sienna-beaver-875544.hostingersite.com/laravel_core
+
+            # 如果有輸入特定的 Class 就跑特定的，否則跑全部
+            if [ -n "${{ github.event.inputs.class }}" ]; then
+                php artisan db:seed --class=${{ github.event.inputs.class }} --force
+            else
+                php artisan db:seed --force
+            fi

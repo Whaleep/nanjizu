@@ -2,6 +2,7 @@
 import { ref, watch, computed } from 'vue';
 import { Head, Link, useForm, usePage } from '@inertiajs/vue3';
 import ShopLayout from '@/Layouts/ShopLayout.vue';
+import ProductGridLayout from '@/Components/Shop/ProductGridLayout.vue';
 import axios from 'axios';
 
 const props = defineProps({
@@ -137,21 +138,9 @@ const submitReview = () => {
 };
 
 // 引入 Builder Components (如果要在商品頁用 Builder)
-import HeroSection from '@/Components/Blocks/HeroSection.vue';
-import TextContent from '@/Components/Blocks/TextContent.vue';
-import ImageWithText from '@/Components/Blocks/ImageWithText.vue';
-import Accordion from '@/Components/Blocks/Accordion.vue';
-import Specification from '@/Components/Blocks/Specification.vue';
-import ModalBtn from '@/Components/Blocks/ModalBtn.vue';
+import blockComponents from '@/Components/Blocks';
 
-const components = {
-    hero: HeroSection,
-    text_content: TextContent,
-    image_with_text: ImageWithText,
-    accordion: Accordion,
-    specification: Specification,
-    modal_btn: ModalBtn,
-};
+const components = blockComponents;
 
 // 準備 Schema.org 資料
 const schemaData = {
@@ -393,30 +382,7 @@ const schemaData = {
         <!-- 關聯商品區塊 -->
         <div v-if="relatedProducts.length > 0" class="mt-16 border-t pt-10">
             <h2 class="text-2xl font-bold mb-6 text-gray-800">您可能也喜歡</h2>
-
-            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6">
-                <div v-for="related in relatedProducts" :key="related.id"
-                     class="bg-white border rounded-xl overflow-hidden hover:shadow-lg transition group">
-
-                    <Link :href="`/shop/product/${related.slug}`" class="block aspect-square bg-gray-100 overflow-hidden relative">
-                        <img v-if="related.image" :src="`/storage/${related.image}`"
-                             class="w-full h-full object-cover group-hover:scale-105 transition duration-500">
-                        <div v-else class="flex items-center justify-center w-full h-full text-gray-400">無圖</div>
-                    </Link>
-
-                    <div class="p-4">
-                        <div class="text-xs text-gray-500 mb-1" v-if="related.category">
-                            {{ related.category.name }}
-                        </div>
-                        <h3 class="font-bold text-base mb-2 group-hover:text-blue-600 line-clamp-2">
-                            <Link :href="`/shop/product/${related.slug}`">{{ related.name }}</Link>
-                        </h3>
-                        <p class="text-red-600 font-bold">
-                            NT$ {{ formatPrice(getMinPrice(related.variants)) }} 起
-                        </p>
-                    </div>
-                </div>
-            </div>
+            <ProductGridLayout :products="relatedProducts" empty-message="暫無商品" />
         </div>
 
     </ShopLayout>

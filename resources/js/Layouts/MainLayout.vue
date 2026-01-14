@@ -227,7 +227,7 @@ onUnmounted(() => {
         </footer>
 
         <!-- 懸浮聯絡按鈕 (Vue Version) -->
-        <div class="fixed bottom-6 left-6 z-50 flex flex-col-reverse items-center gap-3">
+        <div class="fixed bottom-6 left-6 z-50 flex flex-col items-center gap-3">
 
             <!-- 展開後的選單列表 (使用 Vue Transition) -->
             <Transition

@@ -2,7 +2,7 @@
 import { ref } from 'vue'; // 引入 ref
 import { Head, Link, router } from '@inertiajs/vue3';
 import ShopLayout from '@/Layouts/ShopLayout.vue';
-import ProductCard from '@/Components/Shop/ProductCard.vue';    // 引入商品卡片元件
+import ProductGridLayout from '@/Components/Shop/ProductGridLayout.vue';
 
 const props = defineProps({
     products: Object,
@@ -10,25 +10,12 @@ const props = defineProps({
     filters: Object
 });
 
-const formatPrice = (price) => new Intl.NumberFormat('zh-TW').format(price);
-const getMinPrice = (variants) => variants.length ? Math.min(...variants.map(v => v.price)) : 0;
-
 // 搜尋處理
 const search = ref(props.filters.q || '');
 const handleSearch = () => {
     router.get('/shop', { q: search.value }, { preserveState: true });
 };
 
-// 計算價格範圍
-const getPriceDisplay = (variants) => {
-    if (!variants || variants.length === 0) return 'NT$ 0';
-    const prices = variants.map(v => v.price);
-    const min = Math.min(...prices);
-    const max = Math.max(...prices);
-    return min === max
-        ? `NT$ ${new Intl.NumberFormat('zh-TW').format(min)}`
-        : `NT$ ${new Intl.NumberFormat('zh-TW').format(min)} ~ ${new Intl.NumberFormat('zh-TW').format(max)}`;
-};
 </script>
 
 <template>
@@ -37,7 +24,7 @@ const getPriceDisplay = (variants) => {
     <ShopLayout>
         <div class="container mx-auto px-4 py-8">
 
-            <!-- 1. 搜尋框 (新增) -->
+            <!-- 搜尋區塊 -->
             <form @submit.prevent="handleSearch" class="max-w-md mx-auto mb-10">
                 <div class="relative">
                     <input type="text" v-model="search"
@@ -49,7 +36,7 @@ const getPriceDisplay = (variants) => {
                 </div>
             </form>
 
-            <!-- 2. 熱門分類 Grid (新增 - 只有在沒搜尋沒篩選時顯示) -->
+            <!-- 熱門分類 Grid -->
             <div v-if="!filters.q && !filters.tag" class="mb-12">
                 <h1 class="text-3xl font-bold mb-6">熱門分類</h1>
                 <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
@@ -66,7 +53,7 @@ const getPriceDisplay = (variants) => {
                 <h2 class="text-2xl font-bold mt-12 mb-6">最新上架</h2>
             </div>
 
-            <!-- 3. 搜尋/標籤 標題 -->
+            <!-- 搜尋/標籤 標題 -->
             <div v-else class="mb-8 text-center">
                 <h1 class="text-3xl font-bold mb-4">
                     <span v-if="filters.tag">標籤：{{ filters.tag }}</span>
@@ -75,22 +62,12 @@ const getPriceDisplay = (variants) => {
                 <Link href="/shop" class="text-blue-600 hover:underline">清除篩選</Link>
             </div>
 
-            <!-- 4. 商品列表 (保持不變) -->
-            <div v-if="products.data.length > 0" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-                <ProductCard v-for="product in products.data" :key="product.id" :product="product" />
-            </div>
+            <!-- 商品列表 -->
+            <ProductGridLayout 
+                :products="products" 
+                :empty-message="filters.q || filters.tag ? '找不到相關商品' : '暫無商品'"
+            />
 
-            <div v-else class="py-20 text-center bg-white rounded-lg border border-dashed">
-                <p class="text-gray-500 text-xl">沒有找到相關商品。</p>
-            </div>
-
-            <!-- 分頁 -->
-            <div v-if="products.links.length > 3" class="mt-10 flex justify-center gap-1">
-                <template v-for="(link, index) in products.links" :key="index">
-                    <Link v-if="link.url" :href="link.url" v-html="link.label" class="px-4 py-2 border rounded-md text-sm" :class="link.active ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'" />
-                    <span v-else v-html="link.label" class="px-4 py-2 border rounded-md text-sm text-gray-400 bg-gray-50"></span>
-                </template>
-            </div>
         </div>
     </ShopLayout>
 </template>

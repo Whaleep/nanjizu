@@ -1964,13 +1964,12 @@ namespace Illuminate\Support\Facades {
          * Re-route the Symfony command events to their Laravel counterparts.
          *
          * @internal
-         * @return \App\Console\Kernel
+         * @return \Illuminate\Foundation\Console\Kernel
          * @static
          */
         public static function rerouteSymfonyCommandEvents()
         {
-            //Method inherited from \Illuminate\Foundation\Console\Kernel 
-            /** @var \App\Console\Kernel $instance */
+            /** @var \Illuminate\Foundation\Console\Kernel $instance */
             return $instance->rerouteSymfonyCommandEvents();
         }
 
@@ -1984,8 +1983,7 @@ namespace Illuminate\Support\Facades {
          */
         public static function handle($input, $output = null)
         {
-            //Method inherited from \Illuminate\Foundation\Console\Kernel 
-            /** @var \App\Console\Kernel $instance */
+            /** @var \Illuminate\Foundation\Console\Kernel $instance */
             return $instance->handle($input, $output);
         }
 
@@ -1999,8 +1997,7 @@ namespace Illuminate\Support\Facades {
          */
         public static function terminate($input, $status)
         {
-            //Method inherited from \Illuminate\Foundation\Console\Kernel 
-            /** @var \App\Console\Kernel $instance */
+            /** @var \Illuminate\Foundation\Console\Kernel $instance */
             $instance->terminate($input, $status);
         }
 
@@ -2014,8 +2011,7 @@ namespace Illuminate\Support\Facades {
          */
         public static function whenCommandLifecycleIsLongerThan($threshold, $handler)
         {
-            //Method inherited from \Illuminate\Foundation\Console\Kernel 
-            /** @var \App\Console\Kernel $instance */
+            /** @var \Illuminate\Foundation\Console\Kernel $instance */
             $instance->whenCommandLifecycleIsLongerThan($threshold, $handler);
         }
 
@@ -2027,8 +2023,7 @@ namespace Illuminate\Support\Facades {
          */
         public static function commandStartedAt()
         {
-            //Method inherited from \Illuminate\Foundation\Console\Kernel 
-            /** @var \App\Console\Kernel $instance */
+            /** @var \Illuminate\Foundation\Console\Kernel $instance */
             return $instance->commandStartedAt();
         }
 
@@ -2040,8 +2035,7 @@ namespace Illuminate\Support\Facades {
          */
         public static function resolveConsoleSchedule()
         {
-            //Method inherited from \Illuminate\Foundation\Console\Kernel 
-            /** @var \App\Console\Kernel $instance */
+            /** @var \Illuminate\Foundation\Console\Kernel $instance */
             return $instance->resolveConsoleSchedule();
         }
 
@@ -2055,8 +2049,7 @@ namespace Illuminate\Support\Facades {
          */
         public static function command($signature, $callback)
         {
-            //Method inherited from \Illuminate\Foundation\Console\Kernel 
-            /** @var \App\Console\Kernel $instance */
+            /** @var \Illuminate\Foundation\Console\Kernel $instance */
             return $instance->command($signature, $callback);
         }
 
@@ -2069,8 +2062,7 @@ namespace Illuminate\Support\Facades {
          */
         public static function registerCommand($command)
         {
-            //Method inherited from \Illuminate\Foundation\Console\Kernel 
-            /** @var \App\Console\Kernel $instance */
+            /** @var \Illuminate\Foundation\Console\Kernel $instance */
             $instance->registerCommand($command);
         }
 
@@ -2086,8 +2078,7 @@ namespace Illuminate\Support\Facades {
          */
         public static function call($command, $parameters = [], $outputBuffer = null)
         {
-            //Method inherited from \Illuminate\Foundation\Console\Kernel 
-            /** @var \App\Console\Kernel $instance */
+            /** @var \Illuminate\Foundation\Console\Kernel $instance */
             return $instance->call($command, $parameters, $outputBuffer);
         }
 
@@ -2101,8 +2092,7 @@ namespace Illuminate\Support\Facades {
          */
         public static function queue($command, $parameters = [])
         {
-            //Method inherited from \Illuminate\Foundation\Console\Kernel 
-            /** @var \App\Console\Kernel $instance */
+            /** @var \Illuminate\Foundation\Console\Kernel $instance */
             return $instance->queue($command, $parameters);
         }
 
@@ -2114,8 +2104,7 @@ namespace Illuminate\Support\Facades {
          */
         public static function all()
         {
-            //Method inherited from \Illuminate\Foundation\Console\Kernel 
-            /** @var \App\Console\Kernel $instance */
+            /** @var \Illuminate\Foundation\Console\Kernel $instance */
             return $instance->all();
         }
 
@@ -2127,8 +2116,7 @@ namespace Illuminate\Support\Facades {
          */
         public static function output()
         {
-            //Method inherited from \Illuminate\Foundation\Console\Kernel 
-            /** @var \App\Console\Kernel $instance */
+            /** @var \Illuminate\Foundation\Console\Kernel $instance */
             return $instance->output();
         }
 
@@ -2140,8 +2128,7 @@ namespace Illuminate\Support\Facades {
          */
         public static function bootstrap()
         {
-            //Method inherited from \Illuminate\Foundation\Console\Kernel 
-            /** @var \App\Console\Kernel $instance */
+            /** @var \Illuminate\Foundation\Console\Kernel $instance */
             $instance->bootstrap();
         }
 
@@ -2153,8 +2140,7 @@ namespace Illuminate\Support\Facades {
          */
         public static function bootstrapWithoutBootingProviders()
         {
-            //Method inherited from \Illuminate\Foundation\Console\Kernel 
-            /** @var \App\Console\Kernel $instance */
+            /** @var \Illuminate\Foundation\Console\Kernel $instance */
             $instance->bootstrapWithoutBootingProviders();
         }
 
@@ -2167,8 +2153,7 @@ namespace Illuminate\Support\Facades {
          */
         public static function setArtisan($artisan)
         {
-            //Method inherited from \Illuminate\Foundation\Console\Kernel 
-            /** @var \App\Console\Kernel $instance */
+            /** @var \Illuminate\Foundation\Console\Kernel $instance */
             $instance->setArtisan($artisan);
         }
 
@@ -2176,13 +2161,12 @@ namespace Illuminate\Support\Facades {
          * Set the Artisan commands provided by the application.
          *
          * @param array $commands
-         * @return \App\Console\Kernel
+         * @return \Illuminate\Foundation\Console\Kernel
          * @static
          */
         public static function addCommands($commands)
         {
-            //Method inherited from \Illuminate\Foundation\Console\Kernel 
-            /** @var \App\Console\Kernel $instance */
+            /** @var \Illuminate\Foundation\Console\Kernel $instance */
             return $instance->addCommands($commands);
         }
 
@@ -2190,13 +2174,12 @@ namespace Illuminate\Support\Facades {
          * Set the paths that should have their Artisan commands automatically discovered.
          *
          * @param array $paths
-         * @return \App\Console\Kernel
+         * @return \Illuminate\Foundation\Console\Kernel
          * @static
          */
         public static function addCommandPaths($paths)
         {
-            //Method inherited from \Illuminate\Foundation\Console\Kernel 
-            /** @var \App\Console\Kernel $instance */
+            /** @var \Illuminate\Foundation\Console\Kernel $instance */
             return $instance->addCommandPaths($paths);
         }
 
@@ -2204,13 +2187,12 @@ namespace Illuminate\Support\Facades {
          * Set the paths that should have their Artisan "routes" automatically discovered.
          *
          * @param array $paths
-         * @return \App\Console\Kernel
+         * @return \Illuminate\Foundation\Console\Kernel
          * @static
          */
         public static function addCommandRoutePaths($paths)
         {
-            //Method inherited from \Illuminate\Foundation\Console\Kernel 
-            /** @var \App\Console\Kernel $instance */
+            /** @var \Illuminate\Foundation\Console\Kernel $instance */
             return $instance->addCommandRoutePaths($paths);
         }
 
@@ -16034,6 +16016,15 @@ namespace Illuminate\Support\Facades {
             return \Illuminate\Http\Request::hasValidRelativeSignatureWhileIgnoring($ignoreQuery);
         }
 
+        /**
+         * @see \Inertia\ServiceProvider::registerRequestMacro()
+         * @static
+         */
+        public static function inertia()
+        {
+            return \Illuminate\Http\Request::inertia();
+        }
+
             }
     /**
      * @see \Illuminate\Routing\ResponseFactory
@@ -17419,6 +17410,16 @@ namespace Illuminate\Support\Facades {
         {
             /** @var \Illuminate\Routing\Router $instance */
             return $instance->tap($callback);
+        }
+
+        /**
+         * @param array<array-key, mixed> $props
+         * @see \Inertia\ServiceProvider::registerRouterMacro()
+         * @static
+         */
+        public static function inertia($uri, $component, $props = [])
+        {
+            return \Illuminate\Routing\Router::inertia($uri, $component, $props);
         }
 
         /**
@@ -23670,6 +23671,15 @@ namespace Illuminate\Http {
             return \Illuminate\Http\Request::hasValidRelativeSignatureWhileIgnoring($ignoreQuery);
         }
 
+        /**
+         * @see \Inertia\ServiceProvider::registerRequestMacro()
+         * @static
+         */
+        public static function inertia()
+        {
+            return \Illuminate\Http\Request::inertia();
+        }
+
             }
     }
 
@@ -23678,6 +23688,16 @@ namespace Illuminate\Routing {
      * @mixin \Illuminate\Routing\RouteRegistrar
      */
     class Router {
+        /**
+         * @param array<array-key, mixed> $props
+         * @see \Inertia\ServiceProvider::registerRouterMacro()
+         * @static
+         */
+        public static function inertia($uri, $component, $props = [])
+        {
+            return \Illuminate\Routing\Router::inertia($uri, $component, $props);
+        }
+
         /**
          * @see \LaravelLang\Routes\ServiceProvider::registerGroup()
          * @param \Closure $callback
@@ -23700,6 +23720,44 @@ namespace Illuminate\Routing {
         public static function lazy($enabled = true)
         {
             return \Illuminate\Routing\Route::lazy($enabled);
+        }
+
+            }
+    }
+
+namespace Illuminate\Testing {
+    /**
+     * @template TResponse of \Symfony\Component\HttpFoundation\Response
+     * @mixin \Illuminate\Http\Response
+     */
+    class TestResponse {
+        /**
+         * @see \Inertia\Testing\TestResponseMacros::assertInertia()
+         * @param \Closure|null $callback
+         * @static
+         */
+        public static function assertInertia($callback = null)
+        {
+            return \Illuminate\Testing\TestResponse::assertInertia($callback);
+        }
+
+        /**
+         * @see \Inertia\Testing\TestResponseMacros::inertiaPage()
+         * @static
+         */
+        public static function inertiaPage()
+        {
+            return \Illuminate\Testing\TestResponse::inertiaPage();
+        }
+
+        /**
+         * @see \Inertia\Testing\TestResponseMacros::inertiaProps()
+         * @param string|null $propName
+         * @static
+         */
+        public static function inertiaProps($propName = null)
+        {
+            return \Illuminate\Testing\TestResponse::inertiaProps($propName);
         }
 
             }
@@ -31629,6 +31687,11 @@ namespace  {
 }
 
 
+namespace Facades\Livewire\Features\SupportFileUploads {
+    /**
+     * @mixin \Livewire\Features\SupportFileUploads\GenerateSignedUploadUrl     */
+    class GenerateSignedUploadUrl extends \Livewire\Features\SupportFileUploads\GenerateSignedUploadUrl {}
+}
 
 
 

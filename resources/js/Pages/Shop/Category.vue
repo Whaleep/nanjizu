@@ -1,7 +1,7 @@
 <script setup>
 import { Head, Link } from '@inertiajs/vue3';
 import ShopLayout from '@/Layouts/ShopLayout.vue';
-import ProductCard from '@/Components/Shop/ProductCard.vue'; // 引入商品卡片元件
+import ProductGridLayout from '@/Components/Shop/ProductGridLayout.vue';
 
 const props = defineProps({
     category: Object,
@@ -68,23 +68,7 @@ const getMinPrice = (variants) => variants.length ? Math.min(...variants.map(v =
         </div>
 
         <!-- 商品列表 -->
-        <div v-if="products.data.length > 0" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
-            <template v-for="product in products.data" :key="product.id">
-                <!-- 直接使用元件 -->
-                <ProductCard :product="product" />
-            </template>
-        </div>
-        <div v-else class="text-center py-10 text-gray-500">此分類暫無商品。</div>
-
-        <!-- 分頁 -->
-        <div v-if="products.links.length > 3" class="mt-10 flex justify-center gap-1">
-            <template v-for="(link, index) in products.links" :key="index">
-                <Link v-if="link.url" :href="link.url" v-html="link.label"
-                      class="px-4 py-2 border rounded-md text-sm"
-                      :class="link.active ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'" />
-                <span v-else v-html="link.label" class="px-4 py-2 border rounded-md text-sm text-gray-400 bg-gray-50"></span>
-            </template>
-        </div>
+        <ProductGridLayout :products="products" empty-message="此分類暫無商品" />
 
     </ShopLayout>
 </template>

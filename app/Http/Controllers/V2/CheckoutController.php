@@ -4,6 +4,7 @@ namespace App\Http\Controllers\V2;
 
 use App\Http\Controllers\Controller;
 use App\Models\Order;
+use App\Models\ShippingMethod;
 use App\Services\CartService;
 use App\Services\CheckoutService;
 use App\Services\ECPayService;
@@ -24,15 +25,23 @@ class CheckoutController extends Controller
     {
         $cartItems = $this->cartService->getCartDetails();
 
+        // 如果購物車是空的，不進行結帳，導向商店首頁
         if ($cartItems->isEmpty()) {
             return redirect()->route('shop.index');
         }
 
-        $total = $this->cartService->total();
+        // 商品小計 (扣除優惠券後，尚未加運費)
+        $subtotal = $this->cartService->total();
+
+        // 取得啟用的運送方式
+        $shippingMethods = ShippingMethod::where('is_active', true)
+            ->orderBy('sort_order')
+            ->get();
 
         return Inertia::render('Shop/Checkout', [
             'cartItems' => $cartItems,
-            'total' => $total,
+            'subtotal' => $subtotal,
+            'shippingMethods' => $shippingMethods,
         ]);
     }
 
@@ -47,6 +56,7 @@ class CheckoutController extends Controller
             'customer_address' => 'required',
             'payment_method' => 'required|in:cod,bank_transfer,ecpay',
             'notes' => 'nullable',
+            'shipping_method_id' => 'required|exists:shipping_methods,id',
         ]);
 
         try {
@@ -61,7 +71,6 @@ class CheckoutController extends Controller
             // 4. 一般付款：跳轉到 V2 成功頁
             // 使用 to_route 輔助函式，對應 routes/web.php 定義的名稱
             return to_route('checkout.success', $order->id);
-
         } catch (\Exception $e) {
             // Inertia 會自動處理這裡的錯誤訊息並回傳給前端 form.errors
             return back()->withErrors(['error' => '下單失敗：' . $e->getMessage()]);

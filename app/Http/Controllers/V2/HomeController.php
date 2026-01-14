@@ -17,10 +17,10 @@ class HomeController extends Controller
 
     public function index()
     {
+        $page = $this->homeService->getHomePageData();
+
         return Inertia::render('Home', [
-            'latestPosts' => $this->homeService->getLatestPosts(3),
-            // 如果 V2 首頁想顯示商品，可以順便傳過去：
-            // 'latestProducts' => $this->homeService->getLatestProducts(4),
+            'page' => $page,
         ]);
     }
 }

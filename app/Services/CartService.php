@@ -50,6 +50,7 @@ class CartService
             return (object) [
                 'variant_id' => $variant->id,
                 'product_name' => $variant->product->name,
+                'product_slug' => $variant->product->slug,
                 'variant_name' => $variant->name,
                 // 優先使用規格圖，沒有的話用商品主圖 (getPrimaryImageAttribute)
                 'image' => $variant->image ? $variant->image : $variant->product->primary_image,

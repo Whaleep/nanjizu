@@ -1,8 +1,9 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+use App\Models\Product;
+use App\Models\Post;
 use App\Http\Controllers\V2;
-use App\Http\Controllers\PageController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\DashboardController;
@@ -12,6 +13,8 @@ use App\Http\Controllers\OrderTrackingController;
 use App\Http\Controllers\Admin\OrderController as AdminOrderController;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Http\Request;
 use Inertia\Inertia;
 
 
@@ -111,14 +114,62 @@ Route::middleware(['auth'])->group(function () {
 // 後台管理路由群組 (後台專屬非 Filament 功能)
 Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(function () {
     Route::get('/orders/{order}/print', [AdminOrderController::class, 'print'])->name('orders.print');
+
+    // 用 webhook 取得 line User ID
+    Route::post('/line/webhook', [\App\Http\Controllers\WebhookController::class, 'handleLineCallback'])->name('webhook.line');
+    Route::get('/debug/line', [\App\Http\Controllers\WebhookController::class, 'debugLine'])->name('debug.line');
 });
 
 // 共用 API 不分版本
 // 綠界金流回調路由
 Route::post('/payment/callback', [PaymentController::class, 'callback'])->name('payment.callback');
 
-// 用 webhook 取得 line User ID
-Route::post('/line/webhook', [\App\Http\Controllers\WebhookController::class, 'handleLineCallback'])->name('webhook.line');
+// API: 區塊專用商品列表 (公開)
+Route::get('/api/products/block', function (Illuminate\Http\Request $request) {
+    $query = Product::where('is_active', true)->with('variants');
+
+    if ($request->category_id) {
+        $query->where('shop_category_id', $request->category_id);
+    }
+
+    if ($request->tag_id) {
+        $query->whereHas('tags', function ($q) use ($request) {
+            $q->where('id', $request->tag_id);
+        });
+    }
+
+    return $query->latest()->take($request->limit ?? 8)->get();
+});
+
+// API: 區塊專用文章列表
+Route::get('/api/posts/block', function (Request $request) {
+    $query = Post::where('is_published', true);
+
+    // 篩選類型 (如果有指定且不是 'all')
+    if ($request->type && $request->type !== 'all') {
+        $query->where('category', $request->type);
+    }
+
+    // 取最新 N 筆
+    $limit = $request->limit ?? 3;
+
+    $posts = $query->latest('published_at')
+        ->take($limit)
+        ->get()
+        ->map(function ($post) {
+            // 整理前端需要的欄位 (包含圖片完整網址)
+            return [
+                'id' => $post->id,
+                'title' => $post->title,
+                'slug' => $post->slug,
+                'category' => $post->category,
+                'image_url' => $post->image ? Storage::url($post->image) : null,
+                'date' => $post->published_at ? $post->published_at->format('Y/m/d') : '',
+            ];
+        });
+
+    return response()->json($posts);
+});
 
 /*
 |--------------------------------------------------------------------------
@@ -134,4 +185,4 @@ Route::prefix('v1')
 | Static Pages (放在最後以免攔截)
 |--------------------------------------------------------------------------
 */
-Route::get('/{slug}', [PageController::class, 'showV2'])->name('page.show');
+Route::get('/{slug}', [V2\PageController::class, 'show'])->name('page.show');

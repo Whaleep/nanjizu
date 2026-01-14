@@ -1,10 +1,12 @@
 <script setup>
 import { Head, Link, useForm, usePage } from '@inertiajs/vue3';
 import MainLayout from '@/Layouts/MainLayout.vue';
+import { ref, computed } from 'vue';
 
 const props = defineProps({
     cartItems: Array,
-    total: Number,
+    subtotal: Number,
+    shippingMethods: Array,
 });
 const page = usePage();
 const user = page.props.auth.user; // 取得登入者
@@ -18,6 +20,26 @@ const form = useForm({
     customer_address: user ? user.address : '',
     notes: '',
     payment_method: 'bank_transfer', // 預設選項
+    shipping_method_id: null,
+});
+
+// 計算當前運費
+const currentShippingFee = computed(() => {
+    if (!form.shipping_method_id) return 0;
+    
+    const method = props.shippingMethods.find(m => m.id === form.shipping_method_id);
+    if (!method) return 0;
+
+    // 判斷免運
+    if (method.free_shipping_threshold && props.subtotal >= method.free_shipping_threshold) {
+        return 0;
+    }
+    return method.fee;
+});
+
+// 計算最終總金額
+const finalTotal = computed(() => {
+    return props.subtotal + currentShippingFee.value;
 });
 
 const submit = () => {
@@ -71,6 +93,38 @@ const submit = () => {
                         <!-- CSRF Token (Laravel Blade 會自動加，Vue 要手動加) -->
                         <input type="hidden" name="_token" :value="$page.props.csrf_token">
 
+                        <!-- 運送方式選擇區塊 -->
+                        <div class="bg-white p-6 rounded-lg shadow border mb-6">
+                            <h3 class="text-xl font-bold mb-4">運送方式</h3>
+                            <div class="space-y-3">
+                                <label v-for="method in shippingMethods" :key="method.id" 
+                                    class="flex items-center justify-between p-3 border rounded cursor-pointer hover:bg-gray-50 transition"
+                                    :class="form.shipping_method_id === method.id ? 'border-blue-500 ring-1 ring-blue-500 bg-blue-50' : ''">
+                                    
+                                    <div class="flex items-center gap-3">
+                                        <input type="radio" name="shipping_method_id" :value="method.id" v-model="form.shipping_method_id" required>
+                                        <div>
+                                            <div class="font-bold">{{ method.name }}</div>
+                                            <div v-if="method.free_shipping_threshold" class="text-xs text-gray-500">
+                                                滿 ${{ formatPrice(method.free_shipping_threshold) }} 免運
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="font-bold text-gray-700">
+                                        <!-- 顯示運費邏輯 -->
+                                        <span v-if="method.free_shipping_threshold && subtotal >= method.free_shipping_threshold" class="text-green-600">
+                                            免運費 <span class="line-through text-gray-400 text-xs">${{ method.fee }}</span>
+                                        </span>
+                                        <span v-else>
+                                            + ${{ method.fee }}
+                                        </span>
+                                    </div>
+                                </label>
+                            </div>
+                            <div v-if="!form.shipping_method_id" class="text-red-500 text-sm mt-2">請選擇一種運送方式</div>
+                        </div>
+
                         <div class="bg-white p-6 rounded-lg shadow border mb-6">
                             <h3 class="text-xl font-bold mb-4">收件人資訊</h3>
 
@@ -123,7 +177,7 @@ const submit = () => {
                         </div>
 
                         <button type="submit" class="w-full bg-blue-600 text-white font-bold py-4 rounded-lg hover:bg-blue-700 transition shadow-lg text-lg">
-                            提交訂單 (NT$ {{ formatPrice(total) }})
+                            提交訂單 (NT$ {{ formatPrice(finalTotal) }})
                         </button>
                     </form>
                 </div>
@@ -141,9 +195,20 @@ const submit = () => {
                                 <div class="font-bold">NT$ {{ formatPrice(item.subtotal) }}</div>
                             </li>
                         </ul>
-                        <div class="flex justify-between text-xl font-bold border-t pt-4">
+                        <div class="flex justify-between mb-2 text-gray-600">
+                            <span>商品小計</span>
+                            <span>NT$ {{ formatPrice(subtotal) }}</span>
+                        </div>
+                        <div class="flex justify-between mb-4 text-gray-600">
+                            <span>運費</span>
+                            <span v-if="form.shipping_method_id">
+                                NT$ {{ formatPrice(currentShippingFee) }}
+                            </span>
+                            <span v-else class="text-sm">(請先選擇運送方式)</span>
+                        </div>
+                        <div class="flex justify-between mb-6 text-xl font-bold text-gray-900 border-t pt-4">
                             <span>總金額</span>
-                            <span class="text-red-600">NT$ {{ formatPrice(total) }}</span>
+                            <span class="text-red-600">NT$ {{ formatPrice(finalTotal) }}</span>
                         </div>
                     </div>
                 </div>

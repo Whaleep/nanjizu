@@ -9,6 +9,12 @@ use Illuminate\Support\Facades\Storage;
 class Post extends Model
 {
     protected $guarded = [];
+
+    protected $casts = [
+        'published_at' => 'datetime',
+        'is_published' => 'boolean',
+    ];
+
     // 當模型啟動時執行
     protected static function booted(): void
     {
