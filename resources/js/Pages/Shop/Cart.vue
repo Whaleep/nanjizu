@@ -159,7 +159,7 @@ const removeCoupon = async () => {
 
                                     <!-- 小計與移除 -->
                                     <div class="flex flex-col items-end gap-1">
-                                        <span class="text-sm font-bold text-gray-900 md:hidden">
+                                        <span class="text-xs md:text-sm font-bold text-gray-900">
                                             小計: NT$ <span :id="`subtotal-${item.variant_id}`">{{ formatPrice(item.subtotal) }}</span>
                                         </span>
                                         
@@ -231,3 +231,17 @@ const removeCoupon = async () => {
         </div>
     </MainLayout>
 </template>
+
+<style scoped>
+/* 移除 Chrome, Safari, Edge, Opera 的 type="number" 預設箭頭 */
+input::-webkit-outer-spin-button,
+input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+/* 移除 Firefox 的 type="number" 預設箭頭 */
+input[type=number] {
+  -moz-appearance: textfield;
+}
+</style>

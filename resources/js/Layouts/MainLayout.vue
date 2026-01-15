@@ -2,6 +2,7 @@
 import { ref, onMounted, onUnmounted, watch } from 'vue';
 import { Link, usePage } from '@inertiajs/vue3';
 import axios from 'axios';
+import CartFeedback from '@/Components/Shop/CartFeedback.vue';
 
 // 取得全域共享資料 (Shared Data)
 const page = usePage();
@@ -9,6 +10,15 @@ const page = usePage();
 const mobileMenuOpen = ref(false);
 // 控制懸浮按鈕開關
 const fabOpen = ref(false);
+
+// === 加入購物車回饋邏輯 ===
+const showFeedback = ref(false);
+const feedbackItem = ref({});
+
+const handleShowFeedback = (event) => {
+    feedbackItem.value = event.detail;
+    showFeedback.value = true;
+};
 
 // 初始化邏輯 (優先讀取 localStorage) ===
 const initCartCount = () => {
@@ -57,6 +67,7 @@ watch(() => page.props.cartCount, (newCount) => {
 
 onMounted(() => {
     window.addEventListener('cart-updated', updateCartCount);
+    window.addEventListener('show-cart-feedback', handleShowFeedback);
 
     // 額外監聽 'storage' 事件：這是為了讓「多個分頁」同步
     // 如果使用者開了兩個分頁，在 A 分頁加購物車，B 分頁也會自動更新
@@ -72,6 +83,7 @@ onMounted(() => {
 
 onUnmounted(() => {
     window.removeEventListener('cart-updated', updateCartCount);
+    window.removeEventListener('show-cart-feedback', handleShowFeedback);
     // 記得移除 storage 監聽
     // window.removeEventListener('storage', ...); // 略，Vue 組件銷毀通常不需太擔心全域事件記憶體洩漏，但嚴謹點可移除
 });
@@ -285,6 +297,13 @@ onUnmounted(() => {
                 </svg>
             </button>
         </div>
+
+        <!-- 全域購物車回饋 -->
+        <CartFeedback 
+            :show="showFeedback" 
+            :item="feedbackItem" 
+            @close="showFeedback = false" 
+        />
 
     </div>
 </template>

@@ -140,6 +140,13 @@ class ContentBlocks
                     Toggle::make('show_cart')
                         ->label('顯示購物車按鈕')
                         ->default(true),
+                    Select::make('card_variant')
+                        ->label('卡片樣式')
+                        ->options([
+                            'standard' => '標準卡片',
+                            'small' => '精簡小卡片',
+                        ])
+                        ->default('standard'),
                 ]),
 
             // [文章列表區塊]

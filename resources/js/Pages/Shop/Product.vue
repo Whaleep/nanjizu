@@ -19,7 +19,6 @@ const selectedVariant = ref(props.product.variants[0] || {});
 const isWishlisted = ref(props.isWishlisted);
 const quantity = ref(1);
 const isLoading = ref(false);
-const showToast = ref(false);
 
 const formatPrice = (price) => new Intl.NumberFormat('zh-TW').format(price);
 
@@ -29,11 +28,6 @@ const priceRange = computed(() => {
     const max = Math.max(...prices);
     return min === max ? `NT$ ${formatPrice(min)}` : `NT$ ${formatPrice(min)} ~ ${formatPrice(max)}`;
 });
-
-const getMinPrice = (variants) => {
-    if (!variants || variants.length === 0) return 0;
-    return Math.min(...variants.map(v => v.price));
-};
 
 // 加入購物車 (優化版)
 const addToCart = async () => {
@@ -51,11 +45,16 @@ const addToCart = async () => {
             detail: { count: response.data.cartCount }
         }));
 
-        // 2. 顯示右上角提示
-        showToast.value = true;
-        setTimeout(() => showToast.value = false, 5000);
-
-        // 3. 移除 window.location.reload() <--- 這就是造成閃爍的主因！
+        // 2. 顯示詳細回饋 (發送事件給 MainLayout)
+        window.dispatchEvent(new CustomEvent('show-cart-feedback', {
+            detail: {
+                product_name: props.product.name,
+                variant_name: selectedVariant.value.name,
+                quantity: quantity.value,
+                image: selectedVariant.value.image || props.product.primary_image,
+                price: selectedVariant.value.price
+            }
+        }));
 
     } catch (error) {
         // 失敗邏輯: 抓取後端回傳的 message
@@ -169,21 +168,6 @@ const schemaData = {
     </Head>
 
     <ShopLayout>
-
-        <!-- Toast 通知元件 -->
-        <transition
-            enter-active-class="transition ease-out duration-300"
-            enter-from-class="transform opacity-0 translate-y-2"
-            enter-to-class="transform opacity-100 translate-y-0"
-            leave-active-class="transition ease-in duration-200"
-            leave-from-class="transform opacity-100 translate-y-0"
-            leave-to-class="transform opacity-0 translate-y-2"
-        >
-            <div v-if="showToast" class="fixed top-20 right-4 z-50 bg-green-600 text-white px-6 py-3 rounded-lg shadow-xl flex items-center gap-2">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
-                <span>已加入購物車！</span>
-            </div>
-        </transition>
 
         <!-- 上半部：商品主要資訊區 (永遠保持左右分欄) -->
         <div class="grid grid-cols-1 md:grid-cols-12 gap-10">
@@ -381,8 +365,8 @@ const schemaData = {
 
         <!-- 關聯商品區塊 -->
         <div v-if="relatedProducts.length > 0" class="mt-16 border-t pt-10">
-            <h2 class="text-2xl font-bold mb-6 text-gray-800">您可能也喜歡</h2>
-            <ProductGridLayout :products="relatedProducts" empty-message="暫無商品" />
+            <h2 class="text-2xl font-bold mb-8 text-gray-800">您可能也喜歡</h2>
+            <ProductGridLayout :products="relatedProducts" variant="small" empty-message="暫無商品" />
         </div>
 
     </ShopLayout>

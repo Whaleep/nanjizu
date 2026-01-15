@@ -54,7 +54,18 @@ const addToCart = async () => {
             detail: { count: response.data.cartCount }
         }));
 
-        // 簡單的成功視覺回饋 (按鈕變綠一下)
+        // 顯示詳細回饋
+        window.dispatchEvent(new CustomEvent('show-cart-feedback', {
+            detail: {
+                product_name: props.product.name,
+                variant_name: selectedVariant.value.name,
+                quantity: quantity.value,
+                image: selectedVariant.value.image || props.product.primary_image,
+                price: selectedVariant.value.price
+            }
+        }));
+
+        // 簡單的成功視覺回饋
         const btnText = document.getElementById(`btn-text-${props.product.id}`);
         if(btnText) {
             const originalText = btnText.innerText;

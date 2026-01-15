@@ -36,6 +36,8 @@ onMounted(async () => {
         <ProductGridLayout 
             v-else 
             :products="products" 
+            :variant="data.card_variant || 'standard'"
+            :show-action="data.show_cart ?? true"
         />
     </div>
 </template>
