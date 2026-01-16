@@ -18,6 +18,7 @@ class Product extends Model
         'description' => 'array', // 自動轉為陣列
         'is_active' => 'boolean',
         'content' => 'array',
+        'options' => 'array',
     ];
 
     // 自動附加這個虛擬欄位到 JSON

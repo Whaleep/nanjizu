@@ -20,7 +20,8 @@ const formatPrice = (p) => new Intl.NumberFormat('zh-TW').format(p);
         
         <!-- 左側：圖片區 -->
         <Link :href="link" class="shrink-0 relative block w-24 h-24 md:w-32 md:h-32 bg-gray-100 rounded-lg overflow-hidden border">
-            <img v-if="image" :src="`/storage/${image}`" class="w-full h-full object-cover group-hover:scale-105 transition duration-500">
+            <!-- 修正：判斷 image 是否已包含 /storage 或完整網址 -->
+            <img v-if="image" :src="image.startsWith('http') || image.startsWith('/') ? image : `/storage/${image}`" class="w-full h-full object-cover group-hover:scale-105 transition duration-500">
             <div v-else class="w-full h-full flex items-center justify-center text-xs text-gray-400">無圖</div>
         </Link>
 

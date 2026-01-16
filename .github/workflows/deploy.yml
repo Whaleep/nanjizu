@@ -86,3 +86,14 @@ jobs:
             php artisan config:cache
             php artisan route:cache
             php artisan view:cache
+      
+      # 6. 部屬後暖機一次網站
+      - name: 🔥 Warm up site
+        run: |
+          # 等幾秒讓 PHP-FPM / Nginx 重新載入完成（保險）
+          sleep 5
+
+          # 打首頁和後台各一次
+          curl -L --silent --show-error --max-time 20 "https://sienna-beaver-875544.hostingersite.com" > /dev/null
+          curl -L --silent --show-error --max-time 20 "https://sienna-beaver-875544.hostingersite.com/admin" > /dev/null
+            

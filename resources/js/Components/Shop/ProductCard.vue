@@ -24,15 +24,29 @@ const isWishlisted = ref(props.product.is_wishlisted || false);
 
 // 動態圖片邏輯
 const displayImage = computed(() => {
-    // 優先權 1: 選中的規格有圖片
+    // 優先權 1: 選中的規格有圖片 (Unique variant image)
     if (selectedVariant.value && selectedVariant.value.image) {
         return `/storage/${selectedVariant.value.image}`;
     }
-    // 優先權 2: 商品本身的主圖 (後端 Accessor 處理過的 primary_image)
+
+    // 優先權 2: 選項代表圖片 (Option Image)
+    if (selectedVariant.value && selectedVariant.value.attributes && props.product.options) {
+        for (const [optName, optValue] of Object.entries(selectedVariant.value.attributes)) {
+            const optionDef = props.product.options.find(o => o.name === optName);
+            if (optionDef) {
+                const valueDef = optionDef.values.find(v => v.value == optValue);
+                if (valueDef && valueDef.image) {
+                    return `/storage/${valueDef.image}`;
+                }
+            }
+        }
+    }
+
+    // 優先權 3: 商品本身的主圖
     if (props.product.primary_image) {
         return `/storage/${props.product.primary_image}`;
     }
-    // 優先權 3: 無圖
+    // 優先權 4: 無圖
     return null;
 });
 
@@ -161,9 +175,55 @@ const toggleWishlist = async () => {
 
                 <!-- 操作區 (規格/數量/按鈕) - 受 showAction 控制 -->
                 <div v-if="showAction" class="space-y-3">
-                    <!-- 規格選擇 (下拉選單) -->
-                    <div v-if="product.variants && product.variants.length > 1">
+                    
+                    <!-- 情況 A: 單一維度規格 (一維) -> 顯示視覺化按鈕 (可滑動) -->
+                    <div v-if="product.options && product.options.length === 1" class="w-full">
+                         <!-- 增加 p-1 (padding) 讓 ring-offset 不會被 overflow 切掉 -->
+                         <div class="flex gap-2 overflow-x-auto p-1 scrollbar-hide">
+                            <button v-for="val in product.options[0].values" :key="val.value"
+                                    @click.stop.prevent="() => {
+                                        // 找出對應的 variant
+                                        const found = product.variants.find(v => v.attributes && v.attributes[product.options[0].name] == val.value);
+                                        if(found) selectedVariant = found;
+                                    }"
+                                    class="flex-shrink-0 transition-all focus:outline-none"
+                                    :title="val.label">
+                                
+                                <!-- 顏色圓圈 -->
+                                <span v-if="product.options[0].type === 'color'" 
+                                      class="block w-6 h-6 rounded-full border shadow-sm ring-offset-1"
+                                      :class="selectedVariant.attributes?.[product.options[0].name] == val.value ? 'ring-2 ring-blue-600' : 'hover:ring-2 hover:ring-gray-300'"
+                                      :style="{ backgroundColor: val.value }">
+                                </span>
+
+                                <!-- 圖片方塊 -->
+                                <span v-else-if="product.options[0].type === 'image'"
+                                      class="block w-8 h-8 rounded border overflow-hidden bg-gray-50 ring-offset-1"
+                                      :class="selectedVariant.attributes?.[product.options[0].name] == val.value ? 'ring-2 ring-blue-600' : 'hover:ring-2 hover:ring-gray-300'">
+                                    <img v-if="val.image" :src="`/storage/${val.image}`" class="w-full h-full object-cover">
+                                    <span v-else class="w-full h-full flex items-center justify-center text-[10px] text-gray-400">無圖</span>
+                                </span>
+                                
+                                <!-- 文字方塊 -->
+                                <span v-else 
+                                      class="block px-2 py-1 border rounded text-xs font-medium whitespace-nowrap"
+                                      :class="selectedVariant.attributes?.[product.options[0].name] == val.value ? 'bg-blue-50 border-blue-600 text-blue-700' : 'bg-white border-gray-200 text-gray-700'">
+                                    {{ val.label }}
+                                </span>
+                            </button>
+                         </div>
+                         <!-- 顯示當前選取的名稱 -->
+                         <div class="text-xs text-gray-500 mt-1">
+                            {{ product.options[0].name }}: {{ selectedVariant.attributes?.[product.options[0].name] ? 
+                                product.options[0].values.find(v => v.value == selectedVariant.attributes[product.options[0].name])?.label 
+                                : '' }}
+                         </div>
+                    </div>
+
+                    <!-- 情況 B: 多維度或無 Options 設定 -> 維持下拉選單 (但如果只有一個變體且沒 options 就不顯示下拉) -->
+                    <div v-else-if="product.variants && product.variants.length > 1">
                         <select v-model="selectedVariant"
+                                @click.stop.prevent
                                 class="w-full text-sm border rounded-lg border-gray-200 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 py-1 px-2">
                             <template v-for="variant in product.variants" :key="variant.id">
                                 <option :value="variant" :disabled="variant.stock <= 0">

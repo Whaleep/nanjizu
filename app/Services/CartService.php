@@ -47,13 +47,37 @@ class CartService
             // 確保購買數量不超過庫存
             $quantity = min($quantity, $variant->stock);
 
+            // 圖片邏輯：
+            // 1. 變體專屬圖片
+            $displayImage = $variant->image;
+
+            // 2. 如果沒有變體圖片，嘗試找選項代表圖片
+            if (!$displayImage && $variant->attributes && $variant->product->options) {
+                foreach ($variant->attributes as $optName => $optValue) {
+                    // 找到對應的 Option 定義
+                    $optionDef = collect($variant->product->options)->firstWhere('name', $optName);
+                    if ($optionDef && isset($optionDef['values'])) {
+                        // 找到對應的 Value 定義
+                        $valueDef = collect($optionDef['values'])->firstWhere('value', $optValue);
+                        if ($valueDef && !empty($valueDef['image'])) {
+                            $displayImage = $valueDef['image'];
+                            break; // 找到就停 (優先權：前面的 Option 優先，如 Color)
+                        }
+                    }
+                }
+            }
+
+            // 3. 最後使用商品主圖
+            if (!$displayImage) {
+                $displayImage = $variant->product->primary_image;
+            }
+
             return (object) [
                 'variant_id' => $variant->id,
                 'product_name' => $variant->product->name,
                 'product_slug' => $variant->product->slug,
                 'variant_name' => $variant->name,
-                // 優先使用規格圖，沒有的話用商品主圖 (getPrimaryImageAttribute)
-                'image' => $variant->image ? $variant->image : $variant->product->primary_image,
+                'image' => $displayImage,
                 'price' => $variant->price,
                 'stock' => $variant->stock,
                 'quantity' => $quantity,

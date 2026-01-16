@@ -81,7 +81,8 @@ onUnmounted(() => {
             <div class="p-4">
                 <div class="flex gap-4 mb-4">
                     <div class="w-20 h-20 flex-shrink-0 bg-gray-100 rounded-lg overflow-hidden border">
-                        <img v-if="item.image" :src="`/storage/${item.image}`" class="w-full h-full object-cover">
+                        <!-- item.image 若已經包含 /storage/ 則不需再加，否則補上 -->
+                        <img v-if="item.image" :src="item.image.startsWith('/') ? item.image : `/storage/${item.image}`" class="w-full h-full object-cover">
                         <div v-else class="w-full h-full flex items-center justify-center text-gray-400 text-xs">無圖</div>
                     </div>
                     <div class="flex-grow min-w-0">

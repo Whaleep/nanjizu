@@ -105,6 +105,210 @@ class ProductResource extends Resource
 
                                 // 1-3. 規格管理 (Repeater)
                                 Forms\Components\Section::make('規格與庫存')
+                                    ->headerActions([
+                                        // Action A: 從選項生成規格
+                                        Forms\Components\Actions\Action::make('generateVariants')
+                                            ->label('從選項生成規格')
+                                            ->icon('heroicon-m-arrows-right-left')
+                                            ->requiresConfirmation()
+                                            ->modalHeading('確定要生成規格嗎？')
+                                            ->modalDescription('這將會根據您的「視覺化點擊介面選項」重新產生所有可能的規格組合。既有的規格列表將會被覆蓋。')
+                                            ->modalSubmitActionLabel('確認生成')
+                                            ->action(function (Forms\Get $get, Forms\Set $set) {
+                                                $options = $get('options') ?? [];
+                                                if (empty($options)) {
+                                                    // 如果沒有選項，提示使用者
+                                                    \Filament\Notifications\Notification::make()
+                                                        ->title('請先定義視覺化選項')
+                                                        ->warning()
+                                                        ->send();
+                                                    return;
+                                                }
+
+                                                // 1. 解析選項，準備進行排列組合
+                                                // options 結構: [{name: 'Color', values: [{label: 'Red', value: '#F00'}, ...]}, ...]
+                                                $optionData = [];
+                                                foreach ($options as $opt) {
+                                                    if (!empty($opt['values'])) {
+                                                        $optionData[] = [
+                                                            'name' => $opt['name'],
+                                                            'values' => $opt['values'] // array of {label, value}
+                                                        ];
+                                                    }
+                                                }
+
+                                                if (empty($optionData)) return;
+
+                                                // 2. 笛卡兒積 (Cartesian Product) 遞迴函數
+                                                $cartesian = function ($input) use (&$cartesian) {
+                                                    $result = [[]];
+                                                    foreach ($input as $key => $values) {
+                                                        $append = [];
+                                                        foreach ($result as $product) {
+                                                            foreach ($values as $item) {
+                                                                $product[$key] = $item;
+                                                                $append[] = $product;
+                                                            }
+                                                        }
+                                                        $result = $append;
+                                                    }
+                                                    return $result;
+                                                };
+
+                                                // 整理要進行組合的陣列： [[val1, val2], [val3, val4]]
+                                                $inputForCartesian = [];
+                                                foreach ($optionData as $opt) {
+                                                    $inputForCartesian[$opt['name']] = $opt['values'];
+                                                }
+
+                                                $combinations = $cartesian($inputForCartesian);
+
+                                                // 3. 轉換為 Variants Repeater 格式
+                                                $newVariants = [];
+                                                foreach ($combinations as $combo) {
+                                                    // $combo 範例: ['Color' => {label: 'Red', value: '#F00'}, 'Size' => {label: 'S', value: 'S'}]
+
+                                                    // 屬性 Key-Value 對 (儲存給 attributes欄位)
+                                                    $attributes = [];
+                                                    $nameParts = [];
+
+                                                    foreach ($combo as $optName => $valObj) {
+                                                        $attributes[$optName] = $valObj['value'];
+                                                        $nameParts[] = $valObj['label']; // 使用 label (顯示文字) 來組合成商品名稱
+                                                    }
+
+                                                    $variantName = implode(' / ', $nameParts);
+
+                                                    $newVariants[] = [
+                                                        'name' => $variantName,
+                                                        'price' => 0,
+                                                        'stock' => 0,
+                                                        'sku' => '',
+                                                        'image' => null, // 預設無圖
+                                                        'attributes' => $attributes,
+                                                    ];
+                                                }
+
+                                                // 4. 設定回表單
+                                                $set('variants', $newVariants);
+
+                                                \Filament\Notifications\Notification::make()
+                                                    ->title('規格生成完畢')
+                                                    ->success()
+                                                    ->send();
+                                            }),
+
+                                        // Action B: 批次修改價格
+                                        Forms\Components\Actions\Action::make('bulkPriceUpdate')
+                                            ->label('批次修改價格')
+                                            ->icon('heroicon-m-currency-dollar')
+                                            ->form([
+                                                Forms\Components\TextInput::make('price')
+                                                    ->label('統一價格')
+                                                    ->numeric()
+                                                    ->required()
+                                                    ->prefix('$'),
+                                            ])
+                                            ->action(function (array $data, Forms\Get $get, Forms\Set $set) {
+                                                $currentVariants = $get('variants') ?? [];
+
+                                                if (empty($currentVariants)) {
+                                                    return;
+                                                }
+
+                                                $newPrice = $data['price'];
+
+                                                // 更新每一列的 price
+                                                foreach ($currentVariants as $key => $variant) {
+                                                    $currentVariants[$key]['price'] = $newPrice;
+                                                }
+
+                                                $set('variants', $currentVariants);
+
+                                                \Filament\Notifications\Notification::make()
+                                                    ->title('價格已更新')
+                                                    ->success()
+                                                    ->send();
+                                            }),
+
+                                        // Action C: 指定選項修改價格 (如: 所有 XL 號)
+                                        Forms\Components\Actions\Action::make('updateOptionPrice')
+                                            ->label('指定選項修改價格')
+                                            ->icon('heroicon-m-adjustments-horizontal')
+                                            ->form(function (Forms\Get $get) {
+                                                // 動態取得目前的選項結構
+                                                $options = $get('options') ?? [];
+                                                // 整理出 Name 清單: ['Color' => 'Color', 'Size' => 'Size']
+                                                $optionNames = [];
+                                                foreach ($options as $opt) {
+                                                    if (!empty($opt['name'])) {
+                                                        $optionNames[$opt['name']] = $opt['name'];
+                                                    }
+                                                }
+
+                                                return [
+                                                    Forms\Components\Select::make('target_option')
+                                                        ->label('選擇選項名稱 (例如 Size)')
+                                                        ->options($optionNames)
+                                                        ->required()
+                                                        ->live() // 讓下一個欄位可以連動
+                                                        ->afterStateUpdated(fn(Forms\Set $set) => $set('target_value', null)),
+
+                                                    Forms\Components\Select::make('target_value')
+                                                        ->label('選擇選項值 (例如 XL)')
+                                                        ->options(function (Forms\Get $get) use ($options) {
+                                                            $targetName = $get('target_option');
+                                                            if (!$targetName) return [];
+
+                                                            // 找出該 Option 的 Values
+                                                            $targetOpt = collect($options)->firstWhere('name', $targetName);
+                                                            if (!$targetOpt || empty($targetOpt['values'])) return [];
+
+                                                            // 回傳 ['XL' => 'XL', 'L' => 'L']
+                                                            $values = [];
+                                                            foreach ($targetOpt['values'] as $v) {
+                                                                $values[$v['value']] = $v['label'] . " ({$v['value']})";
+                                                            }
+                                                            return $values;
+                                                        })
+                                                        ->required()
+                                                        ->disabled(fn(Forms\Get $get) => !$get('target_option')),
+
+                                                    Forms\Components\TextInput::make('price')
+                                                        ->label('設定價格')
+                                                        ->numeric()
+                                                        ->required()
+                                                        ->prefix('$'),
+                                                ];
+                                            })
+                                            ->action(function (array $data, Forms\Get $get, Forms\Set $set) {
+                                                $currentVariants = $get('variants') ?? [];
+                                                if (empty($currentVariants)) return;
+
+                                                $targetOption = $data['target_option'];
+                                                $targetValue = $data['target_value'];
+                                                $newPrice = $data['price'];
+                                                $updatedCount = 0;
+
+                                                foreach ($currentVariants as $key => $variant) {
+                                                    // 檢查 attributes
+                                                    $attrs = $variant['attributes'] ?? [];
+                                                    // 如果該變體的屬性中，有包含目標選項且值相符
+                                                    if (isset($attrs[$targetOption]) && $attrs[$targetOption] == $targetValue) {
+                                                        $currentVariants[$key]['price'] = $newPrice;
+                                                        $updatedCount++;
+                                                    }
+                                                }
+
+                                                $set('variants', $currentVariants);
+
+                                                \Filament\Notifications\Notification::make()
+                                                    ->title("已更新 {$updatedCount} 筆規格價格")
+                                                    ->success()
+                                                    ->send();
+                                            }),
+
+                                    ])
                                     ->schema([
                                         Forms\Components\Repeater::make('variants')
                                             ->relationship()
@@ -136,10 +340,64 @@ class ProductResource extends Resource
                                                     ->image()
                                                     ->directory('products/variants')
                                                     ->columnSpanFull(),
+
+                                                Forms\Components\KeyValue::make('attributes')
+                                                    ->label('規格屬性 (對應點擊介面選項)')
+                                                    ->keyLabel('規格名稱 (如: 顏色)')
+                                                    ->valueLabel('規格值 (如: Red, #FF0000)')
+                                                    ->helperText('請填寫對應「點擊介面選項」的值，例如 顏色: #FF0000, 尺寸: M')
+                                                    ->columnSpanFull(),
                                             ])
                                             ->columns(4)
                                             ->defaultItems(1)
                                             ->addActionLabel('新增規格'),
+                                    ]),
+
+                                // 1-4. 視覺化點擊介面選項
+                                Forms\Components\Section::make('視覺化點擊介面選項 (Visual Options)')
+                                    ->description('定義點擊介面顯示的規格類型 (如顏色圈圈、尺寸方塊)')
+                                    ->schema([
+                                        Forms\Components\Repeater::make('options')
+                                            ->label('選項群組')
+                                            ->schema([
+                                                Forms\Components\TextInput::make('name')
+                                                    ->label('選項名稱 (如: 顏色, 尺寸)')
+                                                    ->required()
+                                                    ->columnSpan(1),
+
+                                                Forms\Components\Select::make('type')
+                                                    ->label('顯示類型')
+                                                    ->options([
+                                                        'text' => '文字方塊 (Text Chips)',
+                                                        'color' => '顏色圈圈 (Color Swatches)',
+                                                        'image' => '圖片方塊 (Image Chips)',
+                                                    ])
+                                                    ->required()
+                                                    ->default('text')
+                                                    ->columnSpan(1),
+
+                                                Forms\Components\Repeater::make('values')
+                                                    ->label('選項值')
+                                                    ->schema([
+                                                        Forms\Components\TextInput::make('label')
+                                                            ->label('顯示文字 (如: 紅色, XL)')
+                                                            ->required(),
+                                                        Forms\Components\TextInput::make('value')
+                                                            ->label('實際值 (如: #FF0000, XL)')
+                                                            ->required(),
+                                                        // 新增：選項值專屬圖片 (例如紅色的代表圖)
+                                                        Forms\Components\FileUpload::make('image')
+                                                            ->label('代表圖 (可選)')
+                                                            ->image()
+                                                            ->directory('products/options')
+                                                            ->columnSpanFull(),
+                                                    ])
+                                                    ->columns(2)
+                                                    ->columnSpanFull(),
+                                            ])
+                                            ->columns(2)
+                                            ->addActionLabel('新增選項群組')
+                                            ->defaultItems(0),
                                     ]),
                             ]),
 
@@ -202,7 +460,7 @@ class ProductResource extends Resource
 
                 Tables\Columns\TextColumn::make('variants_sum_stock')
                     ->label('總庫存')
-                    ->sum('variants', 'stock')
+                    ->getStateUsing(fn(Product $record) => $record->variants->sum('stock'))
                     ->alignEnd(),
 
                 Tables\Columns\IconColumn::make('is_active')
@@ -225,8 +483,45 @@ class ProductResource extends Resource
                     ->label('分類篩選'),
             ])
             ->actions([
-                Tables\Actions\EditAction::make(),
-                Tables\Actions\DeleteAction::make(),
+                Tables\Actions\EditAction::make()
+                    ->label("")
+                    ->tooltip('編輯商品'),
+                Tables\Actions\ReplicateAction::make()
+                    ->label("")
+                    ->tooltip('複製商品')
+                    ->modalHeading('複製商品?')
+                    ->modalSubmitActionLabel('確認複製')
+                    ->modalCancelActionLabel('取消')
+                    ->beforeReplicaSaved(function (Product $replica) {
+                        $replica->name = $replica->name . ' (Copy)';
+                        $replica->slug = Str::slug($replica->name . '-' . time()); // 確保唯一性
+                        $replica->is_active = false; // 預設下架
+                    })
+                    ->after(function (Product $replica, Product $record) {
+                        // 手動複製規格 (Deep Copy Variants)
+                        foreach ($record->variants as $variant) {
+                            $replica->variants()->create([
+                                'name' => $variant->name,
+                                'price' => $variant->price,
+                                'stock' => $variant->stock,
+                                'sku' => $variant->sku ? $variant->sku . '-COPY' : null,
+                                'image' => $variant->image, // 共用圖片路徑
+                                'attributes' => $variant->attributes,
+                            ]);
+                        }
+
+                        \Filament\Notifications\Notification::make()
+                            ->title('商品複製成功')
+                            ->body('已複製商品與所有規格，預設為下架狀態。')
+                            ->success()
+                            ->send();
+                    }),
+                Tables\Actions\DeleteAction::make()
+                    ->label("")
+                    ->tooltip('刪除商品')
+                    ->modalHeading('刪除商品')
+                    ->modalSubmitActionLabel('確認刪除')
+                    ->modalCancelActionLabel('取消'),
             ])
             ->defaultSort('created_at', 'desc');
     }

@@ -15,7 +15,7 @@ const props = defineProps({
 
 // 狀態
 const page = usePage();
-const selectedVariant = ref(props.product.variants[0] || {});
+const selectedVariant = ref(props.product.variants?.[0] || {});
 const isWishlisted = ref(props.isWishlisted);
 const quantity = ref(1);
 const isLoading = ref(false);
@@ -23,7 +23,10 @@ const isLoading = ref(false);
 const formatPrice = (price) => new Intl.NumberFormat('zh-TW').format(price);
 
 const priceRange = computed(() => {
-    const prices = props.product.variants.map(v => v.price);
+    const variants = props.product.variants || [];
+    if (variants.length === 0) return 'NT$ 0';
+    
+    const prices = variants.map(v => v.price);
     const min = Math.min(...prices);
     const max = Math.max(...prices);
     return min === max ? `NT$ ${formatPrice(min)}` : `NT$ ${formatPrice(min)} ~ ${formatPrice(max)}`;
@@ -51,7 +54,8 @@ const addToCart = async () => {
                 product_name: props.product.name,
                 variant_name: selectedVariant.value.name,
                 quantity: quantity.value,
-                image: selectedVariant.value.image || props.product.primary_image,
+                // 優先使用當前顯示的圖片 (可能是變體圖、選項圖或主圖)
+                image: currentImage.value || props.product.primary_image,
                 price: selectedVariant.value.price
             }
         }));
@@ -78,12 +82,164 @@ const galleryImages = computed(() => {
 
 const currentImage = ref(galleryImages.value[0] || null);
 
-// 當選中規格改變時，如果該規格有圖片，就切換過去
+// === 新增：視覺化規格選擇邏輯 ===
+const options = computed(() => props.product.options || []);
+const hasOptions = computed(() => options.value.length > 0);
+const selectedOptions = ref({}); // 儲存使用者的選擇 { "Color": "Red", "Size": "M" }
+
+// 當選中規格改變時，更新圖片
+// 邏輯順序：
+// 1. 變體專屬圖片 (Unique variant image)
+// 2. 選項代表圖片 (Option image, e.g. "Color": "Red" 的圖片)
+// 3. 原本的圖片 (不變)
 watch(selectedVariant, (newVal) => {
+    // 1. 優先檢查變體本身是否有圖
     if (newVal.image) {
         currentImage.value = newVal.image;
+        return;
+    }
+
+    // 2. 檢查選項是否有圖 (從 attributes 反查 options)
+    if (newVal.attributes && props.product.options) {
+        // 遍歷所有選項，看有沒有哪個選項值是有設定圖片的
+        for (const [optName, optValue] of Object.entries(newVal.attributes)) {
+            const optionDef = props.product.options.find(o => o.name === optName);
+            if (optionDef) {
+                const valueDef = optionDef.values.find(v => v.value == optValue);
+                if (valueDef && valueDef.image) {
+                    currentImage.value = valueDef.image;
+                    return; // 找到就停止，優先權取決於 attributes 順序 (通常 Color 在前)
+                }
+            }
+        }
+    }
+    
+    // 3. 如果都沒有，就不用特別切換，或者切回主圖？
+    // 通常行為是維持現狀，或者切回主圖。這裡維持現狀可能比較好，或者切回第一張。
+    // currentImage.value = galleryImages.value[0]; 
+});
+
+// 當選項改變時 (還沒算出 Variant 前)，也希望能即時預覽顏色
+watch(selectedOptions, (newOptions) => {
+    if(!props.product.options) return;
+    
+    // 遍歷新的選項，如果有圖就切換
+    // 我們可以從 options 定義中找
+    for (const [optName, optValue] of Object.entries(newOptions)) {
+         const optionDef = props.product.options.find(o => o.name === optName);
+         if (optionDef) {
+             const valueDef = optionDef.values.find(v => v.value == optValue);
+             if (valueDef && valueDef.image) {
+                 currentImage.value = valueDef.image;
+                 // 這裡不 return，讓後面的選項 (如果有的話) 覆蓋前面的？
+                 // 通常 Color 在第一位，Size 在第二位。我們通常希望 Color 的圖優先。
+                 // 所以如果 options 陣列順序是 Name, Color, Size... 
+                 // 我們應該依據 options 的順序來決定優先權，而不是 selectedOptions 物件的迭代順序
+             }
+         }
+    }
+}, { deep: true });
+
+// 初始化選取狀態
+if (hasOptions.value) {
+    // 預設選取第一個有庫存的變體
+    const defaultVar = props.product.variants?.find(v => v.stock > 0) || props.product.variants?.[0];
+    if (defaultVar && defaultVar.attributes) {
+        selectedOptions.value = { ...defaultVar.attributes };
+    } else {
+        // 如果找不到對應屬性，就預設選取每一個選項的第一個值
+        options.value.forEach(opt => {
+            if (opt.values && opt.values.length > 0) {
+                selectedOptions.value[opt.name] = opt.values[0].value; 
+            }
+        });
+    }
+}
+
+// 根據選項找出對應的 Variant
+const foundVariant = computed(() => {
+    if (!hasOptions.value) return null;
+    
+    return props.product.variants.find(v => {
+        const attrs = v.attributes || {};
+        // 檢查每一個選項是否都匹配
+        return options.value.every(opt => {
+            const selectedVal = selectedOptions.value[opt.name];
+            // 寬鬆比較
+            return attrs[opt.name] == selectedVal;
+        });
+    });
+});
+
+// 當 user 改變選項時，更新 selectedVariant
+watch(foundVariant, (newVar) => {
+    if (newVar) {
+        selectedVariant.value = newVar;
+    } else {
+        // 如果找不到對應的變體 (例如選了 Gray + M，但沒有這個組合)
+        // 我們應該讓 selectedVariant 變成一個空物件或無效狀態，避免加入購物車
+        // 或者保留上一個有效的是危險的，因為 user 以為選了新的。
+        selectedVariant.value = { id: null, stock: 0, price: 0 }; 
     }
 });
+
+// 檢查某個選項值是否可選 (檢查庫存) - 進階功能 (Cross Availability)
+// 邏輯修正：檢查在「已知其他已選選項」的情況下，嘗試選擇這個新值是否會有對應的變體
+const isOptionValueAvailable = (optionName, newValue) => {
+    // 取得目前「暫定」的選項組合
+    const tentativeSelection = { ...selectedOptions.value, [optionName]: newValue };
+    
+    // 檢查是否有變體符合這個組合 (需完全符合所有已選的 key，但這裡檢查的是 tentativeSelection)
+    // 注意：這裡的邏輯比較複雜。
+    // 1. 我們要檢查的是 product.variants 中，是否有任何一個 variant 同時滿足：
+    //    a) 該 variant 的屬性包含 optionName = newValue
+    //    b) 該 variant 的其他屬性也符合目前已選的其他選項 (排除自己)
+    
+    return props.product.variants.some(v => {
+        const attrs = v.attributes || {};
+        
+        // 必須符合目標值
+        if (attrs[optionName] != newValue) return false;
+        
+        // 必須符合其他已選的值 (但如果其他選項還沒選，就不限制)
+        // 這裡做一個寬鬆檢查：遍歷 tentativeSelection 中 *其他* 的 key
+        // 但要注意，如果是切換 Dimension 1 (Color)，那麼 Dimension 2 (Size) 的限制是否仍然有效？
+        // 通常 UI 行為是：
+        // - 使用者改變 Color -> 檢查該 Color 下是否有目前選中的 Size？
+        //   - 如果有 -> Size 保持可選，組合有效。
+        //   - 如果沒有 -> 該 Color 雖然可選 (因為有別的 Size)，但選了之後 Size 應該要自動切換成可用的，或者 Size 變成不可選。
+        // 
+        // 這裡 isOptionValueAvailable 主要是用來 disable 按鈕。
+        // 如果我點了 Gray (Color)，而目前 Size 是 M。
+        // 假設 Gray 只有 S。
+        // 那麼 Gray 這個按鈕應該 disable 嗎？不應該，因為 Gray 是有貨的 (只是沒有 M)。
+        // 所以，通常第一維度 (Color) 永遠檢查「是否存在該 Color 的任意變體」。
+        // 第二維度 (Size) 則檢查「在目前 Color 下，該 Size 是否存在」。
+        
+        // 實作策略：
+        // 找出該選項在 options 陣列中的 index
+        // 如果是第一個維度 (index 0) -> 只要該值存在於任意變體即可
+        // 如果是後續維度 -> 必須符合前面維度的選擇
+        
+        const optionIndex = options.value.findIndex(o => o.name === optionName);
+        if (optionIndex <= 0) {
+            // 第一維度，或者找不到：只檢查是否有該屬性值的變體存在且有庫存(可選)
+            return v.stock > 0; 
+        } else {
+            // 後續維度：檢查是否符合前面所有維度的選擇
+            // 取得前面所有維度的名稱
+            const prevOptionNames = options.value.slice(0, optionIndex).map(o => o.name);
+            
+            // 檢查這個 variant 是否符合前面維度的當前選擇
+            const matchesPrev = prevOptionNames.every(prevName => {
+                return attrs[prevName] == selectedOptions.value[prevName];
+            });
+            
+            return matchesPrev && v.stock > 0;
+        }
+    });
+};
+
 
 // 切換收藏
 const toggleWishlist = async () => {
@@ -235,20 +391,71 @@ const schemaData = {
 
                 <!-- 規格選擇按鈕 -->
                 <div class="mb-8">
-                    <h3 class="text-sm font-bold text-gray-700 mb-3">規格</h3>
-                    <div class="flex flex-wrap gap-3">
-                        <button v-for="variant in product.variants" :key="variant.id"
-                                @click="selectedVariant = variant"
-                                class="px-4 py-2 border rounded-lg font-medium transition flex items-center gap-2"
-                                :class="selectedVariant.id === variant.id ? 'border-blue-600 bg-blue-50 text-blue-700 ring-1 ring-blue-600' : 'hover:border-gray-300 text-gray-700'"
-                                :disabled="variant.stock <= 0">
-                            <div class="flex items-center gap-2">
-                                <!-- 如果規格有圖，顯示小縮圖 -->
-                                <img v-if="variant.image" :src="`/storage/${variant.image}`" class="w-6 h-6 rounded-full object-cover border">
-                                {{ variant.name }}
+                    
+                    <!-- 模式 A: 視覺化選取 (Visual Options) -->
+                    <div v-if="hasOptions" class="space-y-6">
+                        <div v-for="option in options" :key="option.name">
+                            <h3 class="text-sm font-bold text-gray-700 mb-2">
+                                {{ option.name }}: <span class="font-normal text-gray-500">{{ option.values.find(v => v.value == selectedOptions[option.name])?.label }}</span>
+                            </h3>
+                            
+                            <div class="flex flex-wrap gap-3">
+                                <button v-for="val in option.values" :key="val.value"
+                                        @click="selectedOptions[option.name] = val.value"
+                                        :class="[
+                                            selectedOptions[option.name] == val.value 
+                                                ? 'ring-2 ring-blue-600 ring-offset-1' 
+                                                : 'hover:ring-2 hover:ring-gray-300 hover:ring-offset-1',
+                                            !isOptionValueAvailable(option.name, val.value) ? 'opacity-50 cursor-not-allowed' : ''
+                                        ]"
+                                        class="relative rounded-full transition-all focus:outline-none"
+                                        :title="val.label">
+                                        
+                                    <!-- 類型 A: 顏色圓圈 -->
+                                    <span v-if="option.type === 'color'" 
+                                          class="block w-8 h-8 rounded-full border shadow-sm"
+                                          :style="{ backgroundColor: val.value }">
+                                    </span>
+
+                                    <!-- 類型 B: 圖片方塊 (New) -->
+                                    <span v-else-if="option.type === 'image'"
+                                          class="block w-10 h-10 rounded-lg border overflow-hidden bg-gray-50">
+                                        <img v-if="val.image" :src="`/storage/${val.image}`" class="w-full h-full object-cover">
+                                        <span v-else class="w-full h-full flex items-center justify-center text-[10px] text-gray-400">無圖</span>
+                                    </span>
+                                    
+                                    <!-- 類型 C: 文字方塊 -->
+                                    <span v-else 
+                                          class="block px-4 py-2 border rounded-lg text-sm font-medium transition-colors"
+                                          :class="selectedOptions[option.name] == val.value ? 'bg-blue-50 border-blue-600 text-blue-700' : 'bg-white border-gray-200 text-gray-700'">
+                                        {{ val.label }}
+                                    </span>
+                                </button>
                             </div>
-                            <span v-if="variant.stock <= 0" class="text-xs text-red-500 ml-1">(缺貨)</span>
-                        </button>
+                        </div>
+                        
+                        <!-- 提示：如果選擇組合無效 -->
+                        <div v-if="hasOptions && !selectedVariant.id" class="text-red-500 text-sm mt-2">
+                            ⚠️ 目前選擇的規格組合暫無販售，請嘗試其他搭配。
+                        </div>
+                    </div>
+
+                    <!-- 模式 B: 傳統條列式 (Fallback) -->
+                    <div v-else>
+                        <h3 class="text-sm font-bold text-gray-700 mb-3">規格</h3>
+                        <div class="flex flex-wrap gap-3">
+                            <button v-for="variant in product.variants" :key="variant.id"
+                                    @click="selectedVariant = variant"
+                                    class="px-4 py-2 border rounded-lg font-medium transition flex items-center gap-2"
+                                    :class="selectedVariant.id === variant.id ? 'border-blue-600 bg-blue-50 text-blue-700 ring-1 ring-blue-600' : 'hover:border-gray-300 text-gray-700'"
+                                    :disabled="variant.stock <= 0">
+                                <div class="flex items-center gap-2">
+                                    <img v-if="variant.image" :src="`/storage/${variant.image}`" class="w-6 h-6 rounded-full object-cover border">
+                                    {{ variant.name }}
+                                </div>
+                                <span v-if="variant.stock <= 0" class="text-xs text-red-500 ml-1">(缺貨)</span>
+                            </button>
+                        </div>
                     </div>
                 </div>
 
