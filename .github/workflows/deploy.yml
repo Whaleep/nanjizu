@@ -28,22 +28,22 @@ jobs:
           npm run build
 
       # 3.5 清空遠端並重建資料夾結構
-      - name: 🧹 Clean remote build assets
-        uses: appleboy/ssh-action@master
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USERNAME }}
-          password: ${{ secrets.SSH_PASSWORD }}
-          port: ${{ secrets.SSH_PORT }}
-          script: |
-            # 設定路徑
-            BUILD_PATH="domains/sienna-beaver-875544.hostingersite.com/laravel_core/public/build"
+      # - name: 🧹 Clean remote build assets
+      #   uses: appleboy/ssh-action@master
+      #   with:
+      #     host: ${{ secrets.SSH_HOST }}
+      #     username: ${{ secrets.SSH_USERNAME }}
+      #     password: ${{ secrets.SSH_PASSWORD }}
+      #     port: ${{ secrets.SSH_PORT }}
+      #     script: |
+      #       # 設定路徑
+      #       BUILD_PATH="domains/sienna-beaver-875544.hostingersite.com/laravel_core/public/build"
 
-            # 清空舊檔案
-            rm -rf $BUILD_PATH/* || true
+      #       # 清空舊檔案
+      #       rm -rf $BUILD_PATH/* || true
 
-            # 重建 assets 目錄，避免 FTP 550 錯誤
-            mkdir -p $BUILD_PATH/assets
+      #       # 重建 assets 目錄，避免 FTP 550 錯誤
+      #       mkdir -p $BUILD_PATH/assets
 
       # 4. FTP 同步檔案
       - name: 📂 Sync files via FTP

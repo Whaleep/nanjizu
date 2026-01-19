@@ -2,56 +2,75 @@
 
 namespace App\Models;
 
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use App\Traits\HandlesJsonMedia;
+use App\Traits\HasMediaCollections;
+use Spatie\MediaLibrary\HasMedia;
 
-class Product extends Model
+class Product extends Model implements HasMedia
 {
-    use HasFactory;
+    use HasFactory, HasMediaCollections, HandlesJsonMedia;
     protected $guarded = [];
 
     protected $casts = [
-        'images' => 'array',
-        'description' => 'array', // 自動轉為陣列
+        'description' => 'array',
         'is_active' => 'boolean',
         'content' => 'array',
         'options' => 'array',
     ];
 
+    /**
+     * 定義哪些 JSON 欄位需要自動清理圖片
+     */
+    public function jsonMediaAttributes(): array
+    {
+        return ['options', 'description', 'content'];
+    }
+
     // 自動附加這個虛擬欄位到 JSON
-    protected $appends = ['primary_image', 'is_wishlisted'];
+    protected $appends = ['primary_image', 'images', 'is_wishlisted'];
+
+    public function registerMediaCollections(): void
+    {
+        $this->addMediaCollection('product_images')
+            ->useDisk(config('media-library.disk_name'));
+
+        // You can add more specific collections if needed
+    }
 
     // 定義 primary_image 邏輯
     public function getPrimaryImageAttribute()
     {
-        // 1. 優先讀取新的多圖欄位 (取第一張)
-        if (!empty($this->images) && is_array($this->images) && count($this->images) > 0) {
-            return $this->images[0];
-        }
+        // Use Media Library to get the first image
+        return $this->getFirstMediaUrl('product_images', 'thumb');
+    }
 
-        // 2. 如果新欄位沒資料，回退讀取舊欄位 (相容舊資料)
-        if (!empty($this->image)) {
-            return $this->image;
-        }
-
-        // 3. 都沒有就回傳 null
-        return null;
+    // 取得所有圖片的 URL 陣列
+    public function getImagesAttribute()
+    {
+        return $this->getMedia('product_images')->map(function ($media) {
+            return $media->getUrl();
+        })->toArray();
     }
 
     // 判斷當前登入使用者是否收藏
     public function getIsWishlistedAttribute(): bool
     {
-        if (!auth()->check()) {
+        if (!Auth::check()) {
             return false;
         }
 
         // 快取機制：避免在列表渲染時造成過多重複 SQL
         // 雖然 Laravel 本身有快取，但我們可以在載入時使用 withExists 效能更好
         // 這裡提供基礎判斷
-        return $this->wishlistedBy()->where('user_id', auth()->id())->exists();
+        return $this->wishlistedBy()->where('user_id', Auth::id())->exists();
     }
 
     public function category(): BelongsTo

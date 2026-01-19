@@ -44,7 +44,9 @@ const handleSearch = () => {
                           :href="`/shop/category/${cat.slug}`"
                           class="group block text-center">
                         <div class="aspect-square bg-gray-100 rounded-2xl overflow-hidden mb-4 border hover:shadow-lg transition flex items-center justify-center">
-                            <img v-if="cat.image" :src="`/storage/${cat.image}`" class="w-full h-full object-cover group-hover:scale-105 transition duration-500">
+                            <img v-if="cat.category_icon_url || cat.image" 
+                                 :src="cat.category_icon_url ? cat.category_icon_url : (cat.image.startsWith('http') ? cat.image : `/storage/${cat.image}`)" 
+                                 class="w-full h-full object-cover group-hover:scale-105 transition duration-500">
                             <span v-else class="text-4xl text-gray-300 font-bold">{{ cat.name.charAt(0) }}</span>
                         </div>
                         <h2 class="text-xl font-bold group-hover:text-blue-600">{{ cat.name }}</h2>

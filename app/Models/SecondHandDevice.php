@@ -6,16 +6,17 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Storage;
 
-class SecondHandDevice extends Model
+use App\Traits\HasMediaCollections;
+use Spatie\MediaLibrary\HasMedia;
+
+class SecondHandDevice extends Model implements HasMedia
 {
+    use HasMediaCollections;
     protected $guarded = [];
 
-    protected static function booted(): void
+    public function registerMediaCollections(): void
     {
-        static::deleting(function (SecondHandDevice $device) {
-            if ($device->image) {
-                Storage::disk('public')->delete($device->image);
-            }
-        });
+        $this->addMediaCollection('device_images')
+            ->useDisk(config('media-library.disk_name'));
     }
 }

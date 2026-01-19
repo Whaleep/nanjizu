@@ -12,6 +12,7 @@ use Filament\Tables;
 use Filament\Tables\Table;
 use Filament\Forms\Components\Builder;
 use Filament\Forms\Components\Tabs; // 引入 Tabs 元件
+use Filament\Forms\Components\SpatieMediaLibraryFileUpload;
 use Illuminate\Support\Str;
 
 class ProductResource extends Resource
@@ -21,6 +22,8 @@ class ProductResource extends Resource
     protected static ?string $navigationGroup = '商店管理';
     protected static ?string $navigationLabel = '商品列表';
     protected static ?int $navigationSort = 2;
+
+
 
     public static function form(Form $form): Form
     {
@@ -93,12 +96,11 @@ class ProductResource extends Resource
                                 // 1-2. 圖片上傳區塊
                                 Forms\Components\Section::make('商品圖片')
                                     ->schema([
-                                        Forms\Components\FileUpload::make('images')
+                                        SpatieMediaLibraryFileUpload::make('product_images')
                                             ->label('主圖與圖庫 (支援多張拖曳排序)')
-                                            ->image()
+                                            ->collection('product_images')
                                             ->multiple()
                                             ->reorderable()
-                                            ->directory('products')
                                             ->panelLayout('grid')
                                             ->columnSpanFull(),
                                     ]),
@@ -335,10 +337,10 @@ class ProductResource extends Resource
                                                     ->label('料號 (SKU)')
                                                     ->placeholder('可選'),
 
-                                                Forms\Components\FileUpload::make('image')
+                                                Forms\Components\SpatieMediaLibraryFileUpload::make('image')
                                                     ->label('規格圖片')
+                                                    ->collection('variant_image')
                                                     ->image()
-                                                    ->directory('products/variants')
                                                     ->columnSpanFull(),
 
                                                 Forms\Components\KeyValue::make('attributes')
@@ -385,7 +387,7 @@ class ProductResource extends Resource
                                                         Forms\Components\TextInput::make('value')
                                                             ->label('實際值 (如: #FF0000, XL)')
                                                             ->required(),
-                                                        // 新增：選項值專屬圖片 (例如紅色的代表圖)
+                                                        // 選項值專屬圖片 (例如紅色的代表圖)
                                                         Forms\Components\FileUpload::make('image')
                                                             ->label('代表圖 (可選)')
                                                             ->image()
@@ -431,8 +433,9 @@ class ProductResource extends Resource
     {
         return $table
             ->columns([
-                Tables\Columns\ImageColumn::make('images') // 顯示第一張圖
+                Tables\Columns\SpatieMediaLibraryImageColumn::make('product_images') // 顯示第一張圖
                     ->label('圖片')
+                    ->collection('product_images')
                     ->circular()
                     ->stacked(),
 

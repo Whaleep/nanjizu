@@ -12,6 +12,7 @@ use Filament\Tables;
 use Filament\Tables\Table;
 // use Illuminate\Database\Eloquent\Builder;
 // use Illuminate\Database\Eloquent\SoftDeletingScope;
+use Filament\Forms\Components\SpatieMediaLibraryFileUpload;
 use Illuminate\Support\Str;
 
 class ShopCategoryResource extends Resource
@@ -52,10 +53,9 @@ class ShopCategoryResource extends Resource
                         ->default(0),
                 ]),
 
-                Forms\Components\FileUpload::make('image')
+                SpatieMediaLibraryFileUpload::make('category_icon')
                     ->label('分類圖片 (選填)')
-                    ->image()
-                    ->directory('shop-categories'),
+                    ->collection('category_icon'),
 
                 Forms\Components\Toggle::make('is_visible')
                     ->label('前台顯示')
@@ -68,7 +68,9 @@ class ShopCategoryResource extends Resource
     {
         return $table
             ->columns([
-                Tables\Columns\ImageColumn::make('image')->label('圖片'),
+                Tables\Columns\SpatieMediaLibraryImageColumn::make('category_icon')
+                    ->label('圖片')
+                    ->collection('category_icon'),
                 Tables\Columns\TextColumn::make('name')
                     ->label('分類名稱')
                     ->searchable()
@@ -102,5 +104,3 @@ class ShopCategoryResource extends Resource
         ];
     }
 }
-
-?>

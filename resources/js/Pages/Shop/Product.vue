@@ -22,6 +22,12 @@ const isLoading = ref(false);
 
 const formatPrice = (price) => new Intl.NumberFormat('zh-TW').format(price);
 
+const formatImage = (path) => {
+    if (!path) return null;
+    if (path.startsWith('http') || path.startsWith('/storage/') || path.startsWith('data:')) return path;
+    return `/storage/${path}`;
+};
+
 const priceRange = computed(() => {
     const variants = props.product.variants || [];
     if (variants.length === 0) return 'NT$ 0';
@@ -94,7 +100,10 @@ const selectedOptions = ref({}); // 儲存使用者的選擇 { "Color": "Red", "
 // 3. 原本的圖片 (不變)
 watch(selectedVariant, (newVal) => {
     // 1. 優先檢查變體本身是否有圖
-    if (newVal.image) {
+    if (newVal.variant_image_url) {
+        currentImage.value = newVal.variant_image_url;
+        return;
+    } else if (newVal.image) {
         currentImage.value = newVal.image;
         return;
     }
@@ -333,7 +342,7 @@ const schemaData = {
 
                 <!-- 主圖 -->
                 <div class="aspect-square bg-gray-100 rounded-2xl overflow-hidden border mb-4 flex items-center justify-center relative">
-                    <img v-if="currentImage" :src="`/storage/${currentImage}`" class="w-full h-full object-cover transition-all duration-300">
+                    <img v-if="currentImage" :src="formatImage(currentImage)" class="w-full h-full object-cover transition-all duration-300">
                     <span v-else class="text-gray-400">No Image</span>
                 </div>
 
@@ -343,7 +352,7 @@ const schemaData = {
                             @click="currentImage = img"
                             class="w-20 h-20 rounded-lg overflow-hidden border-2 flex-shrink-0"
                             :class="currentImage === img ? 'border-blue-600' : 'border-transparent hover:border-gray-300'">
-                        <img :src="`/storage/${img}`" class="w-full h-full object-cover">
+                        <img :src="formatImage(img)" class="w-full h-full object-cover">
                     </button>
                 </div>
             </div>
@@ -420,7 +429,7 @@ const schemaData = {
                                     <!-- 類型 B: 圖片方塊 (New) -->
                                     <span v-else-if="option.type === 'image'"
                                           class="block w-10 h-10 rounded-lg border overflow-hidden bg-gray-50">
-                                        <img v-if="val.image" :src="`/storage/${val.image}`" class="w-full h-full object-cover">
+                                        <img v-if="val.image" :src="formatImage(val.image)" class="w-full h-full object-cover">
                                         <span v-else class="w-full h-full flex items-center justify-center text-[10px] text-gray-400">無圖</span>
                                     </span>
                                     
@@ -450,7 +459,7 @@ const schemaData = {
                                     :class="selectedVariant.id === variant.id ? 'border-blue-600 bg-blue-50 text-blue-700 ring-1 ring-blue-600' : 'hover:border-gray-300 text-gray-700'"
                                     :disabled="variant.stock <= 0">
                                 <div class="flex items-center gap-2">
-                                    <img v-if="variant.image" :src="`/storage/${variant.image}`" class="w-6 h-6 rounded-full object-cover border">
+                                    <img v-if="variant.variant_image_url || variant.image" :src="formatImage(variant.variant_image_url || variant.image)" class="w-6 h-6 rounded-full object-cover border">
                                     {{ variant.name }}
                                 </div>
                                 <span v-if="variant.stock <= 0" class="text-xs text-red-500 ml-1">(缺貨)</span>

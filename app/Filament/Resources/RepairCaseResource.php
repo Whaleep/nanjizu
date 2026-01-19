@@ -64,8 +64,9 @@ class RepairCaseResource extends Resource
                     ->image()
                     ->directory('posts'),
 
-                Forms\Components\RichEditor::make('content')
-                    ->label('案例描述')
+                Forms\Components\Builder::make('content')
+                    ->label('內容排版')
+                    ->blocks(\App\Filament\Blocks\ContentBlocks::make())
                     ->columnSpanFull(),
 
                 Forms\Components\Toggle::make('is_published')

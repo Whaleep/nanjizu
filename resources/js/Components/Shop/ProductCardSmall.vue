@@ -21,15 +21,26 @@ const isLoading = ref(false);
 // 使用 ref 並從 props 初始化收藏狀態
 const isWishlisted = ref(props.product.is_wishlisted || false);
 
+// 格式化圖片路徑
+const formatImage = (path) => {
+    if (!path) return null;
+    if (path.startsWith('http') || path.startsWith('/storage/') || path.startsWith('data:')) return path;
+    return `/storage/${path}`;
+};
+
 // 動態圖片邏輯
 const displayImage = computed(() => {
-    if (selectedVariant.value && selectedVariant.value.image) {
-        return `/storage/${selectedVariant.value.image}`;
+    let rawPath = null;
+
+    if (selectedVariant.value && selectedVariant.value.variant_image_url) {
+        rawPath = selectedVariant.value.variant_image_url;
+    } else if (selectedVariant.value && selectedVariant.value.image) {
+        rawPath = selectedVariant.value.image;
+    } else if (props.product.primary_image) {
+        rawPath = props.product.primary_image;
     }
-    if (props.product.primary_image) {
-        return `/storage/${props.product.primary_image}`;
-    }
-    return null;
+
+    return formatImage(rawPath);
 });
 
 const formatPrice = (price) => new Intl.NumberFormat('zh-TW').format(price);

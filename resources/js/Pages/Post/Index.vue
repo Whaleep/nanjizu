@@ -22,7 +22,9 @@ const formatDate = (date) => new Date(date).toLocaleDateString('zh-TW');
                      class="group bg-white border rounded-lg overflow-hidden shadow hover:shadow-lg transition flex flex-col">
 
                     <Link :href="`/posts/${post.slug}`" class="block h-56 bg-gray-200 overflow-hidden relative">
-                        <img v-if="post.image" :src="`/storage/${post.image}`" class="w-full h-full object-cover group-hover:scale-105 transition duration-500">
+                        <img v-if="post.featured_image_url || post.image" 
+                             :src="post.featured_image_url ? post.featured_image_url : (post.image.startsWith('http') ? post.image : `/storage/${post.image}`)" 
+                             class="w-full h-full object-cover group-hover:scale-105 transition duration-500">
                         <div v-else class="flex items-center justify-center h-full text-gray-400">無圖片</div>
 
                         <!-- 標籤 -->

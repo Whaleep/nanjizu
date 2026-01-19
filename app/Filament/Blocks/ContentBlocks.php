@@ -50,6 +50,11 @@ class ContentBlocks
                             TextInput::make('subheading')->label('副標題'),
                             TextInput::make('button_text')->label('按鈕文字'),
                             TextInput::make('button_url')->label('按鈕連結'),
+                            TextInput::make('overlay_opacity')
+                                ->label('遮罩透明度 (0-100)')
+                                ->numeric()
+                                ->default(40)
+                                ->helperText('設為 0 可完全關閉遮罩'),
                         ])
                         ->collapsible()
                         ->itemLabel(fn(array $state): ?string => $state['heading'] ?? '投影片')

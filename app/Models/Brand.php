@@ -5,9 +5,20 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-class Brand extends Model
+use App\Traits\HasMediaCollections;
+use Spatie\MediaLibrary\HasMedia;
+
+class Brand extends Model implements HasMedia
 {
+    use HasMediaCollections;
     protected $guarded = [];
+
+    public function registerMediaCollections(): void
+    {
+        $this->addMediaCollection('brand_logo')
+            ->singleFile()
+            ->useDisk(config('media-library.disk_name'));
+    }
 
     public function deviceCategories()
     {

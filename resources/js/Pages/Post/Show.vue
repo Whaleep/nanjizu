@@ -6,6 +6,9 @@ const props = defineProps({
     post: Object
 });
 
+import blockComponents from '@/Components/Blocks';
+const components = blockComponents;
+
 const formatDate = (date) => new Date(date).toLocaleString('zh-TW', { hour12: false, dateStyle: 'long', timeStyle: 'short' });
 </script>
 
@@ -26,12 +29,19 @@ const formatDate = (date) => new Date(date).toLocaleString('zh-TW', { hour12: fa
                     </p>
                 </div>
 
-                <div v-if="post.image" class="mb-8 rounded-lg overflow-hidden shadow-sm">
-                    <img :src="`/storage/${post.image}`" class="w-full h-auto object-cover">
+                <div v-if="post.featured_image_url || post.image" class="mb-8 rounded-lg overflow-hidden shadow-sm">
+                    <img :src="post.featured_image_url ? post.featured_image_url : (post.image.startsWith('http') ? post.image : `/storage/${post.image}`)" class="w-full h-auto object-cover">
                 </div>
 
-                <!-- 文章內容區 (Prose) -->
-                <div class="prose prose-lg max-w-none text-gray-800" v-html="post.content"></div>
+                <!-- 文章內容區 (ContentBlocks) -->
+                <div v-if="post.content && post.content.length > 0" class="space-y-4">
+                    <div v-for="(block, index) in post.content" :key="index">
+                        <component :is="components[block.type]" v-if="components[block.type]" :data="block.data" />
+                    </div>
+                </div>
+                
+                <!-- 相容舊資料 (純 HTML) -->
+                <div v-else-if="typeof post.content === 'string'" class="prose prose-lg max-w-none text-gray-800" v-html="post.content"></div>
 
                 <div class="mt-12 pt-8 border-t flex justify-between items-center">
                     <Link :href="post.category === 'news' ? '/news' : '/cases'"

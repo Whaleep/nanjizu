@@ -41,21 +41,52 @@ The `ProductResource` includes custom header actions:
 
 ---
 
-## 🖼 Image Handling Logic
+## 🖼 Media Management & Cleanup Strategy
+
+The system employs a **Hybrid Media Strategy** to balance professional storage management with flexible CMS capabilities.
+
+### 1. Spatie Media Library (SML)
+
+Used for direct model-level images where automated handling is critical.
+
+-   **Targets**: `Product` (Main Images), `ProductVariant` (SKU Images), `Post` (Featured Image), `Brand` logos.
+-   **Benefit**: SML provides built-in Observers that automatically delete files when a record is deleted. It also handles thumbnails and conversions.
+
+### 2. Custom JSON Media Cleanup (`HandlesJsonMedia` Trait)
+
+Used for complex JSON structures (ContentBlocks, Options) where SML is too rigid.
+
+-   **Targets**: `Product` (options, content), `Page` (content), `Post` (content).
+-   **Logic**:
+    -   **Regex Extraction**: The trait recursively scans attributes (JSON or HTML strings) for storage paths.
+    -   **URL Support**: It identifies full URLs (e.g., `http://.../storage/images/...`) and extracts the relative path.
+    -   **Event Synchronization**: It hooks into Eloquent `deleting` and `updating` events to compare path sets and prune unreferenced files from the disk automatically.
+-   **Usage**: To add cleanup to a model:
+    1.  `use App\Traits\HandlesJsonMedia;`
+    2.  Implement `jsonMediaAttributes(): array` returning the monitored column names.
+
+---
+
+## 🏗 CMS Content Infrastructure (ContentBlocks)
+
+The system utilizes a unified **Builder** approach for rich content across the site.
+
+-   **Shared Schema**: `App\Filament\Blocks\ContentBlocks` defines a library of reusable blocks (Hero, Image+Text, Accordion, etc.).
+-   **Unified Models**: `Product`, `Page`, and `Post` (News/Repair Cases) all use this system.
+-   **Rendering**:
+    -   **Backend**: Filament `Builder` field.
+    -   **Frontend**: Vue components in `@/Components/Blocks` matched by type in a loop.
+-   **Migration**: Older `RichEditor` (HTML) content is still supported as a fallback but new content is structured as JSON for better data integrity and media tracking.
+
+---
+
+## 🖼 Image Resolution Priority (Frontend)
 
 The system minimizes redundant uploads by prioritizing shared images.
 
-### Image Resolution Priority
-
-1. **Variant Image**: If specific SKU has a unique photo (e.g., a shirt with a specific limited print).
-2. **Option Value Image**: Shared photo for an attribute (e.g., all "Deep Blue" products showing the same blue fabric photo).
-3. **Product Primary Image**: The general product thumbnail used as a final fallback.
-
-### CMS Content Images
-
-The product uses a **Builder (Content Blocks)** system for `description` and `content`. Images in these sections are managed via the Tiptap editor or individual FileUpload blocks within the JSON layout.
-
----
+1.  **Variant Image**: If specific SKU has a unique photo (e.g., a shirt with a specific limited print).
+2.  **Option Value Image**: Shared photo for an attribute (e.g., all "Deep Blue" products showing the same blue fabric photo).
+3.  **Product Primary Image**: The general product thumbnail used as a final fallback.
 
 ## ⚡️ Frontend Interactions (`Product.vue`)
 

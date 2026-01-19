@@ -7,10 +7,27 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-class ShopCategory extends Model
+use App\Traits\HasMediaCollections;
+use Spatie\MediaLibrary\HasMedia;
+
+class ShopCategory extends Model implements HasMedia
 {
-    use HasFactory;
+    use HasFactory, HasMediaCollections;
     protected $guarded = [];
+
+    protected $appends = ['category_icon_url'];
+
+    public function registerMediaCollections(): void
+    {
+        $this->addMediaCollection('category_icon')
+            ->singleFile()
+            ->useDisk(config('media-library.disk_name'));
+    }
+
+    public function getCategoryIconUrlAttribute()
+    {
+        return $this->getFirstMediaUrl('category_icon');
+    }
 
     // 父分類
     public function parent(): BelongsTo

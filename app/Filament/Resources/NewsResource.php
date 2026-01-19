@@ -9,6 +9,7 @@ use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
+use Filament\Forms\Components\SpatieMediaLibraryFileUpload;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Str;
 
@@ -60,12 +61,13 @@ class NewsResource extends Resource
                 // =============================================
 
                 Forms\Components\FileUpload::make('image')
-                    ->label('封面圖片')
+                    ->label('對比圖 / 封面')
                     ->image()
                     ->directory('posts'),
 
-                Forms\Components\RichEditor::make('content')
-                    ->label('內容')
+                Forms\Components\Builder::make('content')
+                    ->label('內容排版')
+                    ->blocks(\App\Filament\Blocks\ContentBlocks::make())
                     ->columnSpanFull(),
 
                 Forms\Components\Toggle::make('is_published')
@@ -82,7 +84,9 @@ class NewsResource extends Resource
     {
         return $table
             ->columns([
-                Tables\Columns\ImageColumn::make('image')->label('封面'),
+                Tables\Columns\SpatieMediaLibraryImageColumn::make('featured_image')
+                    ->label('封面')
+                    ->collection('featured_image'),
                 Tables\Columns\TextColumn::make('title')->label('標題')->searchable(),
                 Tables\Columns\IconColumn::make('is_published')->label('發布')->boolean(),
                 Tables\Columns\TextColumn::make('published_at')->label('日期')->date(),

@@ -11,6 +11,7 @@ use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Filament\Forms\Components\Grid;
+use Filament\Forms\Components\SpatieMediaLibraryFileUpload;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
 
@@ -54,10 +55,11 @@ class SecondHandDeviceResource extends Resource
                 Forms\Components\TextInput::make('condition')
                     ->label('機況 (例如：外觀無傷、電池健康度 95%)'),
 
-                Forms\Components\FileUpload::make('image')
+                SpatieMediaLibraryFileUpload::make('device_images')
                     ->label('商品實照')
-                    ->image()
-                    ->directory('second-hand'),
+                    ->collection('device_images')
+                    ->multiple()
+                    ->reorderable(),
 
                 Forms\Components\RichEditor::make('specs')
                     ->label('詳細規格/描述')
@@ -72,7 +74,9 @@ class SecondHandDeviceResource extends Resource
     {
         return $table
             ->columns([
-                Tables\Columns\ImageColumn::make('image')->label('圖片'),
+                Tables\Columns\SpatieMediaLibraryImageColumn::make('device_images')
+                    ->label('圖片')
+                    ->collection('device_images'),
                 Tables\Columns\TextColumn::make('name')->label('名稱')->searchable(),
                 Tables\Columns\TextColumn::make('price')->money('TWD')->label('售價'),
                 Tables\Columns\IconColumn::make('is_sold')

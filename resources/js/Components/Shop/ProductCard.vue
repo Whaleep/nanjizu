@@ -22,32 +22,44 @@ const isLoading = ref(false);
 // 使用 ref 並從 props 初始化收藏狀態
 const isWishlisted = ref(props.product.is_wishlisted || false);
 
+// 格式化圖片路徑
+const formatImage = (path) => {
+    if (!path) return null;
+    if (path.startsWith('http') || path.startsWith('/storage/') || path.startsWith('data:')) return path;
+    return `/storage/${path}`;
+};
+
 // 動態圖片邏輯
 const displayImage = computed(() => {
-    // 優先權 1: 選中的規格有圖片 (Unique variant image)
-    if (selectedVariant.value && selectedVariant.value.image) {
-        return `/storage/${selectedVariant.value.image}`;
+    let rawPath = null;
+
+    // 優先權 1: 選中的規格有圖片
+    if (selectedVariant.value && selectedVariant.value.variant_image_url) {
+        rawPath = selectedVariant.value.variant_image_url;
+    } else if (selectedVariant.value && selectedVariant.value.image) {
+        rawPath = selectedVariant.value.image;
     }
 
-    // 優先權 2: 選項代表圖片 (Option Image)
-    if (selectedVariant.value && selectedVariant.value.attributes && props.product.options) {
+    // 優先權 2: 選項代表圖片
+    if (!rawPath && selectedVariant.value && selectedVariant.value.attributes && props.product.options) {
         for (const [optName, optValue] of Object.entries(selectedVariant.value.attributes)) {
             const optionDef = props.product.options.find(o => o.name === optName);
             if (optionDef) {
                 const valueDef = optionDef.values.find(v => v.value == optValue);
                 if (valueDef && valueDef.image) {
-                    return `/storage/${valueDef.image}`;
+                    rawPath = valueDef.image;
+                    break;
                 }
             }
         }
     }
 
-    // 優先權 3: 商品本身的主圖
-    if (props.product.primary_image) {
-        return `/storage/${props.product.primary_image}`;
+    // 優先權 3: 商品主圖
+    if (!rawPath && props.product.primary_image) {
+        rawPath = props.product.primary_image;
     }
-    // 優先權 4: 無圖
-    return null;
+
+    return formatImage(rawPath);
 });
 
 const formatPrice = (price) => new Intl.NumberFormat('zh-TW').format(price);
@@ -200,7 +212,7 @@ const toggleWishlist = async () => {
                                 <span v-else-if="product.options[0].type === 'image'"
                                       class="block w-8 h-8 rounded border overflow-hidden bg-gray-50 ring-offset-1"
                                       :class="selectedVariant.attributes?.[product.options[0].name] == val.value ? 'ring-2 ring-blue-600' : 'hover:ring-2 hover:ring-gray-300'">
-                                    <img v-if="val.image" :src="`/storage/${val.image}`" class="w-full h-full object-cover">
+                                    <img v-if="val.image" :src="formatImage(val.image)" class="w-full h-full object-cover">
                                     <span v-else class="w-full h-full flex items-center justify-center text-[10px] text-gray-400">無圖</span>
                                 </span>
                                 

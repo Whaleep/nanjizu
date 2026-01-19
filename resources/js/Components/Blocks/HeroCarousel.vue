@@ -60,7 +60,13 @@ const getImageUrl = (img) => {
                 </div>
 
                 <!-- Overlay -->
-                <div class="absolute inset-0 bg-black/40 bg-gradient-to-t from-black/60 to-transparent"></div>
+                <div class="absolute inset-0 transition-opacity duration-300 pointer-events-none"
+                     :style="{
+                        background: (slide.overlay_opacity !== undefined ? slide.overlay_opacity : 40) > 0
+                            ? `linear-gradient(to top, rgba(0,0,0,${Math.min(1, (slide.overlay_opacity !== undefined ? slide.overlay_opacity : 40) * 0.015)}), transparent), rgba(0,0,0,${(slide.overlay_opacity !== undefined ? slide.overlay_opacity : 40) / 100})`
+                            : 'none'
+                     }">
+                </div>
 
                 <!-- Content -->
                 <div class="relative z-10 container mx-auto px-6 h-full flex flex-col justify-center items-center text-center text-white">

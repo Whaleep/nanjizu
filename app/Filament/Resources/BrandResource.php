@@ -10,6 +10,7 @@ use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
+use Filament\Forms\Components\SpatieMediaLibraryFileUpload;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
 
@@ -31,7 +32,9 @@ class BrandResource extends Resource
         return $form
             ->schema([
                 Forms\Components\TextInput::make('name')->label('品牌名稱')->required(),
-                Forms\Components\FileUpload::make('logo')->label('品牌 Logo')->directory('brands'),
+                SpatieMediaLibraryFileUpload::make('brand_logo')
+                    ->label('品牌 Logo')
+                    ->collection('brand_logo'),
                 Forms\Components\TextInput::make('sort_order')->label('排序')->numeric()->default(0),
             ]);
     }
@@ -40,7 +43,9 @@ class BrandResource extends Resource
     {
         return $table
             ->columns([
-                Tables\Columns\ImageColumn::make('logo')->label('Logo'),
+                Tables\Columns\SpatieMediaLibraryImageColumn::make('brand_logo')
+                    ->label('Logo')
+                    ->collection('brand_logo'),
                 Tables\Columns\TextColumn::make('name')->label('品牌名稱')->sortable(),
             ])
             ->actions([Tables\Actions\EditAction::make(),]);
