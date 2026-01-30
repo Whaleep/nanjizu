@@ -29,6 +29,8 @@ class CartController extends Controller
         return Inertia::render('Shop/Cart', [
             'cartItems' => $cartItems,
             'subtotal' => $subtotal,
+            'promoDiscount' => $this->cartService->promotionDiscountAmount(),
+            'appliedPromotions' => $this->cartService->getAppliedPromotions(),
             'discount' => $discount,
             'total' => $total,
             'appliedCoupon' => $coupon ? $coupon->code : null,
@@ -49,11 +51,17 @@ class CartController extends Controller
         $request->validate([
             'variant_id' => 'required|exists:product_variants,id',
             'quantity' => 'required|integer|min:1',
+            'is_gift' => 'nullable|boolean',
+            'promotion_id' => 'nullable|exists:promotions,id',
         ]);
 
         try {
-            // 呼叫 Service，如果有問題會 throw Exception
-            $this->cartService->add($request->variant_id, $request->quantity);
+            $this->cartService->add(
+                $request->variant_id,
+                $request->quantity,
+                $request->is_gift ?? false,
+                $request->promotion_id
+            );
 
             // 成功回傳
             return response()->json([
@@ -86,16 +94,23 @@ class CartController extends Controller
         // ]);
     }
 
-    // API: 更新 (Return JSON)
+    // API: 更新商品數量 (Return JSON)
     public function update(Request $request)
     {
         $request->validate([
             'variant_id' => 'required',
             'quantity' => 'required|integer|min:1',
+            'is_gift' => 'nullable|boolean',
+            'promotion_id' => 'nullable|exists:promotions,id',
         ]);
 
         try {
-            $this->cartService->update($request->variant_id, $request->quantity);
+            $this->cartService->update(
+                $request->variant_id,
+                $request->quantity,
+                $request->is_gift ?? false,
+                $request->promotion_id
+            );
 
             // 回傳成功資料
             $variant = \App\Models\ProductVariant::find($request->variant_id);
@@ -106,7 +121,6 @@ class CartController extends Controller
                 'total' => number_format($this->cartService->total()),
                 'cartCount' => $this->cartService->count(),
             ]);
-
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -115,10 +129,14 @@ class CartController extends Controller
         }
     }
 
-    // API: 移除 (Return JSON)
+    // API: 移除商品 (Return JSON)
     public function remove(Request $request)
     {
-        $this->cartService->remove($request->variant_id);
+        $this->cartService->remove(
+            $request->variant_id,
+            $request->is_gift ?? false,
+            $request->promotion_id
+        );
 
         return response()->json([
             'success' => true,
@@ -160,5 +178,18 @@ class CartController extends Controller
             'discount' => 0,
             'total' => number_format($this->cartService->total()),
         ]);
+    }
+
+    // 準備結帳：接收前端選擇的贈品，存入 Session 後導向結帳頁
+    public function prepareCheckout(Request $request)
+    {
+        $request->validate([
+            'selected_gifts' => 'nullable|array',
+        ]);
+
+        // 將贈品資訊存入 Session（注意：這裡不做驗證，留到結帳頁 CheckoutController 再統一驗證）
+        session(['checkout_selected_gifts' => $request->selected_gifts ?? []]);
+
+        return to_route('checkout.index');
     }
 }

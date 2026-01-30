@@ -29,7 +29,8 @@ class ProductsRelationManager extends RelationManager
     {
         return $table
             ->columns([
-                Tables\Columns\ImageColumn::make('image')->label('圖片'),
+                Tables\Columns\SpatieMediaLibraryImageColumn::make('product_images')->label('圖片')
+                    ->collection('product_images')->circular()->stacked(),
                 Tables\Columns\TextColumn::make('name')->label('商品名稱')->searchable(),
                 Tables\Columns\TextColumn::make('category.name')->label('分類'),
                 Tables\Columns\IconColumn::make('is_active')->label('上架')->boolean(),
@@ -45,7 +46,7 @@ class ProductsRelationManager extends RelationManager
             ])
             ->actions([
                 // 允許「解除連結」 (不會刪除商品，只會移除標籤關聯)
-                Tables\Actions\DetachAction::make(),
+                Tables\Actions\DetachAction::make()->label('')->tooltip('解除標籤連結')->icon('heroicon-o-backspace'),
             ]);
     }
 }

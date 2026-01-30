@@ -20,25 +20,47 @@ const getMinPrice = (variants) => variants.length ? Math.min(...variants.map(v =
 
     <ShopLayout>
         <!-- 麵包屑 -->
-        <div class="text-sm text-gray-500 mb-6 flex items-center gap-2">
-            <Link href="/shop" class="hover:text-blue-600">商店</Link>
-            <span>/</span>
-            <span class="font-bold text-gray-900">{{ category.name }}</span>
-        </div>
+        <nav class="text-sm text-gray-500 mb-6 flex items-center flex-wrap gap-1">
+            <Link href="/shop" class="hover:text-blue-600 hover:underline transition">商店</Link>
+            
+            <!-- 判斷是否有 breadcrumb_path (後端 append 出來的) -->
+            <template v-if="category.breadcrumb_path && category.breadcrumb_path.length > 0">
+                <template v-for="(crumb, index) in category.breadcrumb_path" :key="crumb.id">
+                    <span class="text-gray-300">/</span>
+                    
+                    <!-- 如果是最後一個 (當前分類)，顯示文字即可，不用連結 (或者是不可點的連結) -->
+                    <span v-if="index === category.breadcrumb_path.length - 1" class="font-bold text-gray-800">
+                        {{ crumb.name }}
+                    </span>
+                    
+                    <!-- 祖先分類，顯示連結 -->
+                    <Link v-else :href="`/shop/category/${crumb.slug}`" class="hover:text-blue-600 hover:underline transition">
+                        {{ crumb.name }}
+                    </Link>
+                </template>
+            </template>
+
+            <!-- Fallback: 舊邏輯 (如果後端沒給 breadcrumb_path) -->
+            <template v-else>
+                <span class="text-gray-300">/</span>
+                <span class="font-bold text-gray-800">{{ category.name }}</span>
+            </template>
+        </nav>
 
         <!-- 搜尋框 -->
         <form @submit.prevent="handleSearch" class="max-w-md mx-auto mb-10">
             <div class="relative">
                 <input type="text" v-model="search"
-                        class="w-full border-2 border-gray-200 rounded-full pl-5 pr-12 py-3 focus:outline-none focus:border-blue-500 transition"
-                        placeholder="搜尋商品...">
+                class="w-full border-2 border-gray-200 rounded-full pl-5 pr-12 py-3 focus:outline-none focus:border-blue-500 transition"
+                placeholder="搜尋商品...">
                 <button type="submit" class="absolute right-2 top-2 bg-blue-600 text-white p-2 rounded-full hover:bg-blue-700 transition">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
                 </button>
             </div>
         </form>
-
-        <h1 class="text-3xl font-bold mb-8">{{ category.name }}</h1>
+        
+        <!-- 分類標題 (保持不變) -->
+        <h1 class="text-3xl font-bold mb-8 text-gray-900">{{ category.name }}</h1>
 
         <!-- 子分類 -->
         <div v-if="subcategories.length > 0" class="mb-12">

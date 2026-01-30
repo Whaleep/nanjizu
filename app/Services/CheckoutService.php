@@ -31,7 +31,11 @@ class CheckoutService
      */
     public function createOrder(array $data)
     {
-        $cartItems = $this->cartService->getCartDetails();
+        // 從資料中取得選擇的贈品
+        $selectedGifts = $data['selected_gifts'] ?? [];
+
+        // 取得包含贈品的購物車內容 (這裡會重新驗證贈品資格)
+        $cartItems = $this->cartService->getCheckoutCartDetails($selectedGifts);
 
         if ($cartItems->isEmpty()) {
             throw new Exception('購物車是空的');
@@ -41,6 +45,8 @@ class CheckoutService
         $productsTotal = $this->cartService->total();
         $discount = $this->cartService->discountAmount();
         $coupon = $this->cartService->getCoupon();
+        $couponDiscount = $this->cartService->couponDiscount();
+        $promoDiscount = $this->cartService->promoDiscount();
 
         // 計算運費
         $shippingMethod = ShippingMethod::find($data['shipping_method_id']);
@@ -65,6 +71,8 @@ class CheckoutService
             'notes' => $data['notes'] ?? null,
             'total_amount' => $finalTotal,
             'discount_amount' => $discount,
+            'coupon_discount' => $couponDiscount,
+            'promo_discount' => $promoDiscount,
             'coupon_code' => $coupon ? $coupon->code : null,
             'shipping_method_name' => $shippingMethod->name,
             'shipping_fee' => $shippingFee,
@@ -75,7 +83,7 @@ class CheckoutService
         // 開始資料庫交易
         $order = DB::transaction(function () use ($orderAttributes, $cartItems, $coupon) {
 
-            // 檢查庫存
+            // 檢查庫存 (贈品也要檢查)
             foreach ($cartItems as $item) {
                 $variant = ProductVariant::lockForUpdate()->find($item->variant_id);
 
@@ -97,6 +105,8 @@ class CheckoutService
                     'price' => $item->price,
                     'quantity' => $item->quantity,
                     'subtotal' => $item->subtotal,
+                    'is_gift' => $item->is_gift ?? false,
+                    'promotion_id' => $item->promotion_id ?? null,
                 ]);
 
                 // 扣庫存、同時增加商品銷售數

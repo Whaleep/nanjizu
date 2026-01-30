@@ -19,6 +19,8 @@ class PageResource extends Resource
     protected static ?string $navigationIcon = 'heroicon-o-document-duplicate';
     protected static ?string $navigationGroup = '內容管理';
     protected static ?string $navigationLabel = '自訂頁面';
+    protected static ?string $modelLabel = '自訂頁面';
+    protected static ?string $pluralModelLabel = '自訂頁面';
 
     public static function form(Form $form): Form
     {

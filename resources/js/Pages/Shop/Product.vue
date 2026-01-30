@@ -7,6 +7,7 @@ import axios from 'axios';
 
 const props = defineProps({
     product: Object,
+    // breadcrumbs: Array,
     relatedProducts: Array,
     isWishlisted: Boolean,
     canReview: Boolean,
@@ -32,7 +33,7 @@ const priceRange = computed(() => {
     const variants = props.product.variants || [];
     if (variants.length === 0) return 'NT$ 0';
     
-    const prices = variants.map(v => v.price);
+    const prices = variants.map(v => v.display_price || v.price);
     const min = Math.min(...prices);
     const max = Math.max(...prices);
     return min === max ? `NT$ ${formatPrice(min)}` : `NT$ ${formatPrice(min)} ~ ${formatPrice(max)}`;
@@ -40,6 +41,11 @@ const priceRange = computed(() => {
 
 // 加入購物車 (優化版)
 const addToCart = async () => {
+    if (!props.product.is_sellable) {
+        alert('贈品會在符合條件時自動加入購物車。');
+        return;
+    }
+
     if (selectedVariant.value.stock <= 0) return;
 
     isLoading.value = true;
@@ -60,9 +66,9 @@ const addToCart = async () => {
                 product_name: props.product.name,
                 variant_name: selectedVariant.value.name,
                 quantity: quantity.value,
-                // 優先使用當前顯示的圖片 (可能是變體圖、選項圖或主圖)
-                image: currentImage.value || props.product.primary_image,
-                price: selectedVariant.value.price
+                // 優先使用後端 smart_image，這包含了規格圖與選項圖邏輯
+                image: selectedVariant.value.smart_image ? formatImage(selectedVariant.value.smart_image) : (formatImage(currentImage.value) || props.product.primary_image),
+                price: selectedVariant.value.display_price || selectedVariant.value.price
             }
         }));
 
@@ -359,14 +365,36 @@ const schemaData = {
 
             <!-- 右側：資訊區 (佔 7 等份 = 58%) -->
             <div class="md:col-span-7">
-                <nav class="text-sm text-gray-500 mb-4">
-                    <Link href="/shop" class="hover:underline">商店</Link> /
-                    <Link :href="`/shop/category/${product.category.slug}`" class="hover:underline">{{ product.category.name }}</Link>
+
+                <!-- 麵包屑導航 (Breadcrumbs) -->
+                <nav class="text-sm text-gray-500 mb-4 flex items-center flex-wrap gap-1">
+                    <Link href="/shop" class="hover:text-blue-600 hover:underline">商店</Link>
+                    
+                    <template v-if="product.category.breadcrumb_path && product.category.breadcrumb_path.length > 0">
+                        <span class="text-gray-400">/</span>
+                        <!-- 遍歷祖先分類 (包含自己) -->
+                        <template v-for="(cat, index) in product.category.breadcrumb_path" :key="cat.id">
+                            <Link :href="`/shop/category/${cat.slug}`" class="hover:text-blue-600 hover:underline">
+                                {{ cat.name }}
+                            </Link>
+                            <!-- 如果不是最後一個，顯示分隔線 -->
+                            <span v-if="index < product.category.breadcrumb_path.length - 1" class="text-gray-400">/</span>
+                        </template>
+                    </template>
+                    
+                    <!-- 如果沒有分類資料的 fallback -->
+                    <template v-else-if="product.category">
+                        <span class="text-gray-400">/</span>
+                        <Link :href="`/shop/category/${product.category.slug}`" class="hover:text-blue-600 hover:underline">
+                            {{ product.category.name }}
+                        </Link>
+                    </template>
                 </nav>
 
+                <!-- 商品名稱 大標題 -->
                 <h1 class="text-3xl font-bold mb-2">{{ product.name }}</h1>
 
-                <!-- 新增：摘要顯示 -->
+                <!-- 商品摘要 -->
                 <div v-if="product.excerpt" class="text-gray-600 mb-4 font-medium leading-relaxed whitespace-pre-wrap">
                     {{ product.excerpt }}
                 </div>
@@ -385,8 +413,52 @@ const schemaData = {
 
                 <!-- 當前選中規格的價格 -->
                 <div class="mb-6">
-                    <div class="text-3xl text-red-600 font-bold mb-2">
-                        NT$ {{ formatPrice(selectedVariant.price) }}
+                    <!-- 情況 A: 可販售 -->
+                    <template v-if="product.is_sellable">
+                        <div class="flex items-baseline gap-3 mb-2">
+                            <div class="text-3xl text-red-600 font-bold">
+                                NT$ {{ formatPrice(selectedVariant.display_price || selectedVariant.price) }}
+                            </div>
+                            <div v-if="selectedVariant.has_discount" class="text-lg text-gray-400 line-through">
+                                NT$ {{ formatPrice(selectedVariant.price) }}
+                            </div>
+                            <div v-if="selectedVariant.has_discount" class="bg-red-100 text-red-600 text-xs font-bold px-2 py-1 rounded">
+                                限時特惠
+                            </div>
+                        </div>
+                    </template>
+
+                    <!-- 情況 B: 非賣品 (顯示價值) -->
+                    <template v-else>
+                         <div class="flex items-baseline gap-3 mb-2">
+                            <div class="text-xl text-gray-500 font-bold">
+                                價值：NT$ {{ formatPrice(selectedVariant.price || product.price) }}
+                            </div>
+                        </div>
+                    </template>
+
+                    <!-- 活動標籤列表 -->
+                    <div v-if="product.active_promotions && product.active_promotions.length > 0" class="mt-3 space-y-2">
+                        <div v-for="promo in product.active_promotions" :key="promo.id" 
+                             class="flex items-start gap-2 text-sm bg-gray-50 p-2 rounded-lg border border-gray-100 transition hover:shadow-sm">
+                            
+                            <span class="text-lg mt-0.5">{{ promo.action_type === 'gift' ? '🎁' : '🔥' }}</span>
+                            
+                            <div class="flex-grow">
+                                <!-- 使用 Service 生成的 link -->
+                                <component :is="promo.link ? Link : 'div'" 
+                                           :href="promo.link" 
+                                           class="font-bold text-gray-800 flex items-center gap-2"
+                                           :class="promo.link ? 'hover:text-blue-600 hover:underline cursor-pointer' : ''">
+                                    {{ promo.name }}
+                                    <!-- 小箭頭 icon，暗示可點擊 -->
+                                    <svg v-if="promo.link" class="w-3 h-3 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                                </component>
+                                <div class="text-xs text-gray-500 mt-0.5">
+                                    {{ promo.tooltip }}
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
                     <!-- 庫存顯示 -->
@@ -461,8 +533,11 @@ const schemaData = {
                                 <div class="flex items-center gap-2">
                                     <img v-if="variant.variant_image_url || variant.image" :src="formatImage(variant.variant_image_url || variant.image)" class="w-6 h-6 rounded-full object-cover border">
                                     {{ variant.name }}
-                                </div>
-                                <span v-if="variant.stock <= 0" class="text-xs text-red-500 ml-1">(缺貨)</span>
+                                 </div>
+                                 <div class="flex flex-col items-end">
+                                     <span class="text-xs" :class="selectedVariant.id === variant.id ? 'text-blue-600' : 'text-gray-500'">NT$ {{ formatPrice(variant.display_price || variant.price) }}</span>
+                                     <span v-if="variant.stock <= 0" class="text-[10px] text-red-500">(缺貨)</span>
+                                 </div>
                             </button>
                         </div>
                     </div>
@@ -470,19 +545,33 @@ const schemaData = {
 
                 <!-- 購買區塊 -->
                 <div class="flex gap-4 mb-8">
-                    <input type="number" v-model="quantity" min="1" :max="selectedVariant.stock" class="w-32 border rounded-lg px-4 py-3 text-center font-bold">
-                    <button @click="addToCart"
-                            :disabled="selectedVariant.stock <= 0 || isLoading"
-                            class="flex-1 bg-blue-600 text-white font-bold py-3 rounded-lg hover:bg-blue-700 disabled:bg-gray-400 transition shadow-lg flex items-center justify-center gap-2">
-                        <svg v-if="isLoading" class="animate-spin h-5 w-5" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2a10 10 0 1010 10A10 10 0 0012 2zm0 18a8 8 0 118-8 8 8 0 01-8 8z" opacity=".3"/><path fill="currentColor" d="M20.24 12.24a8 8 0 01-2.48 5.66" /></svg>
-                        {{ isLoading ? '處理中...' : (selectedVariant.stock > 0 ? '加入購物車' : '暫無庫存') }}
-                    </button>
+                    
+                    <!-- 情況 A: 可販售商品 -->
+                    <template v-if="product.is_sellable">
+                        <input type="number" v-model="quantity" min="1" :max="selectedVariant.stock" 
+                               class="w-32 border rounded-lg px-4 py-3 text-center font-bold disabled:bg-gray-100 disabled:text-gray-400"
+                               :disabled="selectedVariant.stock <= 0">
+                        
+                        <button @click="addToCart"
+                                :disabled="selectedVariant.stock <= 0 || isLoading"
+                                class="flex-1 bg-gray-900 text-white font-bold py-3 rounded-lg hover:bg-gray-700 disabled:bg-gray-300 disabled:text-gray-500 disabled:cursor-not-allowed transition shadow-lg flex items-center justify-center gap-2">
+                            <svg v-if="isLoading" class="animate-spin h-5 w-5" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2a10 10 0 1010 10A10 10 0 0012 2zm0 18a8 8 0 118-8 8 8 0 01-8 8z" opacity=".3"/><path fill="currentColor" d="M20.24 12.24a8 8 0 01-2.48 5.66" /></svg>
+                            {{ isLoading ? '處理中...' : (selectedVariant.stock > 0 ? '加入購物車' : '暫無庫存') }}
+                        </button>
+                    </template>
 
-                    <!-- 收藏按鈕 -->
+                    <!-- 情況 B: 非賣品 / 贈品 -->
+                    <template v-else>
+                         <div class="flex-1 bg-green-50 text-green-700 font-bold py-3 rounded-lg border border-green-200 flex items-center justify-center gap-2 cursor-default">
+                             <span>🎁</span>
+                             <span>此商品為活動贈品</span>
+                         </div>
+                    </template>
+
+                    <!-- 收藏按鈕 (任何情況都顯示) -->
                     <button @click="toggleWishlist"
-                class="w-12 h-[50px] border rounded-lg flex items-center justify-center transition hover:border-red-400"
-                :class="isWishlisted ? 'border-red-500 bg-red-50 text-red-500' : 'border-gray-300 text-gray-400'">
-                        <!-- 實心愛心 (已收藏) / 空心愛心 (未收藏) -->
+                        class="w-12 h-[50px] border rounded-lg flex items-center justify-center transition hover:border-red-400 shrink-0"
+                        :class="isWishlisted ? 'border-red-500 bg-red-50 text-red-500' : 'border-gray-300 text-gray-400'">
                         <svg v-if="isWishlisted" class="w-6 h-6 fill-current" viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
                         <svg v-else class="w-6 h-6 fill-none stroke-current stroke-2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"></path></svg>
                     </button>

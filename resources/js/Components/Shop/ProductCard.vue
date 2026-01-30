@@ -33,8 +33,10 @@ const formatImage = (path) => {
 const displayImage = computed(() => {
     let rawPath = null;
 
-    // 優先權 1: 選中的規格有圖片
-    if (selectedVariant.value && selectedVariant.value.variant_image_url) {
+    // 優先權 1: 使用後端計算好的智慧圖片 (包含規格圖、選項圖、主圖回退)
+    if (selectedVariant.value && selectedVariant.value.smart_image) {
+        rawPath = selectedVariant.value.smart_image;
+    } else if (selectedVariant.value && selectedVariant.value.variant_image_url) {
         rawPath = selectedVariant.value.variant_image_url;
     } else if (selectedVariant.value && selectedVariant.value.image) {
         rawPath = selectedVariant.value.image;
@@ -66,6 +68,11 @@ const formatPrice = (price) => new Intl.NumberFormat('zh-TW').format(price);
 
 // 加入購物車邏輯
 const addToCart = async () => {
+    if (!props.product.is_sellable) {
+        alert('贈品會在符合條件時自動加入購物車。');
+        return;
+    }
+
     if (!selectedVariant.value.id || selectedVariant.value.stock <= 0) return;
 
     isLoading.value = true;
@@ -86,8 +93,8 @@ const addToCart = async () => {
                 product_name: props.product.name,
                 variant_name: selectedVariant.value.name,
                 quantity: quantity.value,
-                image: selectedVariant.value.image || props.product.primary_image,
-                price: selectedVariant.value.price
+                image: selectedVariant.value.smart_image || displayImage.value,
+                price: selectedVariant.value.display_price || selectedVariant.value.price
             }
         }));
 
@@ -132,7 +139,7 @@ const toggleWishlist = async () => {
 </script>
 
 <template>
-    <div class="bg-white border rounded-xl overflow-hidden hover:shadow-lg transition group flex flex-col h-full">
+    <div class="bg-white border rounded-xl hover:shadow-lg transition group flex flex-col h-full">
 
         <!-- 圖片區 (點擊進詳情) -->
         <Link :href="`/shop/product/${product.slug}`" class="block aspect-square bg-gray-100 overflow-hidden relative">
@@ -168,10 +175,46 @@ const toggleWishlist = async () => {
 
         <!-- 資訊與操作區 -->
         <div class="p-4 flex flex-col flex-grow">
+
+            <!-- 活動標籤區 (Flex wrap) -->
+            <div v-if="product.active_promotions && product.active_promotions.length > 0" class="mb-2 flex flex-wrap gap-1.5">
+                <div v-for="promo in product.active_promotions" :key="promo.id" class="group/promo relative">
+                    <!-- 標籤本體 (簡潔風格) -->
+                    <component :is="promo.link ? Link : 'div'"
+                         :href="promo.link"
+                         class="flex items-center justify-center w-6 h-6 rounded-full border transition-all relative z-10"
+                         :class="[
+                            promo.action_type === 'gift' 
+                                ? 'bg-green-50 text-green-600 border-green-200 hover:bg-green-100' 
+                                : 'bg-red-50 text-red-600 border-red-200 hover:bg-red-100',
+                            promo.link ? 'cursor-pointer hover:scale-110' : 'cursor-help'
+                         ]">
+                        <!-- 字體稍微放大一點，打折參考圖標🔖🏷️ -->
+                        <span class="text-sm leading-none mt-0.5">
+                            {{ promo.action_type === 'gift' ? '🎁' : '🏷️' }}
+                        </span>
+                    </component>
+
+                    <!-- Tooltip (淺色卡片風格) -->
+                    <div class="absolute bottom-full left-0 mb-2 w-56 p-3 bg-white text-gray-700 text-xs rounded-xl shadow-[0_4px_20px_-4px_rgba(0,0,0,0.15)] border border-gray-100 opacity-0 invisible group-hover/promo:opacity-100 group-hover/promo:visible transition-all duration-200 z-20 pointer-events-none transform origin-bottom-left scale-95 group-hover/promo:scale-100">
+                        <div class="font-bold text-sm mb-1 text-gray-900 border-b border-gray-100 pb-1">
+                            {{ promo.name }}
+                        </div>
+                        <div class="text-gray-500 leading-relaxed mt-1">
+                            {{ promo.tooltip }}
+                        </div>
+                        <!-- 小箭頭 (純白) -->
+                        <div class="absolute top-full left-2 -mt-[5px] border-8 border-transparent border-t-white drop-shadow-sm"></div>
+                    </div>
+                </div>
+            </div>
+
             <!-- 類別與標題 -->
             <div class="mb-3">
                 <div class="text-xs text-gray-500 mb-1" v-if="product.category">
-                    {{ product.category.name }}
+                    <Link :href="`/shop/category/${product.category.slug}`" class="hover:text-blue-600 hover:underline">
+                        {{ product.category.name }}
+                    </Link>
                 </div>
                 <h3 class="font-bold text-base text-gray-800 leading-tight line-clamp-2 h-10 group-hover:text-blue-600 transition">
                     <Link :href="`/shop/product/${product.slug}`">{{ product.name }}</Link>
@@ -181,8 +224,13 @@ const toggleWishlist = async () => {
             <div class="mt-auto space-y-3">
 
                 <!-- 價格顯示 (任何模式都顯示) -->
-                <div class="text-red-600 font-bold text-lg">
-                    NT$ {{ formatPrice(selectedVariant.price || product.price || 0) }}
+                <div class="flex items-baseline gap-2">
+                    <div class="text-red-600 font-bold text-lg">
+                        NT$ {{ formatPrice(selectedVariant.display_price || product.display_price) }}
+                    </div>
+                    <div v-if="selectedVariant.has_discount || product.has_discount" class="text-gray-400 line-through text-xs">
+                        NT$ {{ formatPrice(selectedVariant.price || product.price) }}
+                    </div>
                 </div>
 
                 <!-- 操作區 (規格/數量/按鈕) - 受 showAction 控制 -->
@@ -251,21 +299,33 @@ const toggleWishlist = async () => {
 
                     <!-- 數量與購買按鈕 -->
                     <div class="flex gap-2 w-full">
-                        <!-- 數量輸入 -->
-                        <input type="number" v-model="quantity" min="1" :max="selectedVariant.stock"
-                            class="basis-5/12 flex-shrink-0 w-0 border border-gray-200 rounded-lg text-center text-sm py-2 px-1 focus:ring-blue-500 focus:border-blue-500"
-                            :disabled="selectedVariant.stock <= 0">
-
-                        <!-- 加入按鈕 -->
-                        <button @click="addToCart"
-                                :disabled="selectedVariant.stock <= 0 || isLoading"
-                                class="basis-5/12 flex-grow bg-gray-100 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-200 transition disabled:bg-gray-50 disabled:text-gray-400 disabled:cursor-not-allowed flex items-center justify-center gap-1">
-                            <svg v-if="isLoading" class="animate-spin h-4 w-4" viewBox="0 0 24 24">
-                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                            </svg>
-                            <span :id="`btn-text-${product.id}`">加入購物車</span>
-                        </button>
+                        <!-- 情況 A: 可販售商品 -->
+                        <template v-if="product.is_sellable">
+                            <!-- 數量輸入 -->
+                            <input type="number" v-model="quantity" min="1" :max="selectedVariant.stock"
+                                class="basis-5/12 flex-shrink-0 w-0 border border-gray-200 rounded-lg text-center text-sm py-2 px-1 focus:ring-blue-500 focus:border-blue-500"
+                                :disabled="selectedVariant.stock <= 0">
+    
+                            <!-- 加入按鈕 -->
+                            <button @click.stop.prevent="addToCart"
+                                    :disabled="selectedVariant.stock <= 0 || isLoading"
+                                    class="basis-5/12 flex-grow bg-gray-100 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-200 transition disabled:bg-gray-300 disabled:text-gray-500 disabled:cursor-not-allowed flex items-center justify-center gap-1 shadow-sm">
+                                <svg v-if="isLoading" class="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                                <span :id="`btn-text-${product.id}`">{{ selectedVariant.stock <= 0 ? '缺貨中' : '加入購物車' }}</span>
+                            </button>
+                        </template>
+                        <!-- 情況 B: 只送不賣 / 非賣品 -->
+                        <template v-else>
+                            <Link :href="`/shop/product/${product.slug}`" 
+                                  class="w-full bg-green-50 text-green-700 border border-green-200 rounded-lg text-sm font-bold py-2 hover:bg-green-100 transition text-center flex items-center justify-center gap-1">
+                                <span>🎁</span>
+                                <span>查看活動詳情</span>
+                            </Link>
+                        </template>
+                        
                     </div>
                 </div>
             </div>

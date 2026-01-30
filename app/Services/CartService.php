@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Cart;
 use App\Models\CartItem;
 use App\Models\ProductVariant;
+use App\Models\Promotion;
 use App\Models\Coupon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Session;
@@ -12,147 +13,360 @@ use Exception;
 
 class CartService
 {
+    protected $discountService;
+    private $cachedVariants;
+    private $cachedContent;
+
+    public function __construct(DiscountService $discountService)
+    {
+        $this->discountService = $discountService;
+    }
     // 取得目前的購物車清單 (標準化為 [variant_id => quantity])
     protected function getContent()
     {
-        // 模式 A: 已登入 -> 讀 DB
         if (Auth::check()) {
             $cart = Auth::user()->cart;
-            if (!$cart) return [];
+            if (!$cart) return collect([]);
 
-            return $cart->items->pluck('quantity', 'product_variant_id')->toArray();
+            return $cart->items->map(function ($item) {
+                return (object)[
+                    'id' => $item->id,
+                    'variant_id' => $item->product_variant_id,
+                    'quantity' => $item->quantity,
+                    'is_gift' => $item->is_gift,
+                    'promotion_id' => $item->promotion_id
+                ];
+            });
         }
 
-        // 模式 B: 未登入 -> 讀 Session
-        return Session::get('cart', []);
+        $sessionCart = Session::get('cart', []);
+        $content = collect($sessionCart)->map(function ($data, $key) {
+            // Handle old format [id => qty] and new format [id => ['qty' => X, 'is_gift' => Y]]
+            if (is_array($data)) {
+                $actualVariantId = (str_contains($key, 'gift_')) ? explode('_', $key)[1] : $key;
+                return (object) array_merge(['id' => $key, 'variant_id' => $actualVariantId], $data);
+            }
+            return (object) [
+                'variant_id' => $key,
+                'quantity' => $data,
+                'is_gift' => false,
+                'promotion_id' => null
+            ];
+        });
+        $this->cachedContent = $content;
+        return $content;
     }
 
     // 取得購物車內容 (結合資料庫最新資訊)
     public function getCartDetails()
     {
-        $content = $this->getContent();
+        // 先清理贈品 (僅一次)
+        $this->cleanupGifts();
 
-        if (empty($content)) {
+        $content = $this->getContent();
+        if ($content->isEmpty()) {
             return collect([]);
         }
 
-        // 從資料庫撈取規格與商品資訊
-        $variants = ProductVariant::with('product')
-            ->whereIn('id', array_keys($content))
-            ->get();
+        // 從資料庫撈取規格與商品資訊 (一次拿齊)
+        $this->cachedVariants = ProductVariant::with(['product.media', 'product.productTags', 'media'])
+            ->whereIn('id', $content->pluck('variant_id'))
+            ->get()
+            ->keyBy('id');
 
-        // 組合資料，計算小計
-        return $variants->map(function ($variant) use ($content) {
-            $quantity = $content[$variant->id];
-            // 確保購買數量不超過庫存
-            $quantity = min($quantity, $variant->stock);
+        $standardItems = $content->map(function ($item) {
+            $variant = $this->cachedVariants->get($item->variant_id);
+            if (!$variant) return null;
 
-            // 圖片邏輯：
-            // 1. 變體專屬圖片
-            $displayImage = $variant->image;
-
-            // 2. 如果沒有變體圖片，嘗試找選項代表圖片
-            if (!$displayImage && $variant->attributes && $variant->product->options) {
-                foreach ($variant->attributes as $optName => $optValue) {
-                    // 找到對應的 Option 定義
-                    $optionDef = collect($variant->product->options)->firstWhere('name', $optName);
-                    if ($optionDef && isset($optionDef['values'])) {
-                        // 找到對應的 Value 定義
-                        $valueDef = collect($optionDef['values'])->firstWhere('value', $optValue);
-                        if ($valueDef && !empty($valueDef['image'])) {
-                            $displayImage = $valueDef['image'];
-                            break; // 找到就停 (優先權：前面的 Option 優先，如 Color)
-                        }
-                    }
-                }
-            }
-
-            // 3. 最後使用商品主圖
-            if (!$displayImage) {
-                $displayImage = $variant->product->primary_image;
-            }
+            $quantity = min($item->quantity, $variant->stock);
+            $displayImage = $variant->smart_image;
+            $unitPrice = $item->is_gift ? 0 : $this->discountService->getDiscountedPrice($variant->product, $variant->price);
 
             return (object) [
+                'cart_item_key' => $item->id,
                 'variant_id' => $variant->id,
-                'product_name' => $variant->product->name,
+                'product_id' => $variant->product->id,
+                'category_id' => $variant->product->shop_category_id,
+                'tag_ids' => $variant->product->productTags->pluck('id')->toArray(),
+                'product_name' => $variant->product->name . ($item->is_gift ? ' (贈品)' : ''),
                 'product_slug' => $variant->product->slug,
                 'variant_name' => $variant->name,
                 'image' => $displayImage,
-                'price' => $variant->price,
+                'is_gift' => $item->is_gift,
+                'promotion_id' => $item->promotion_id,
+                'price' => $unitPrice,
+                'original_price' => $variant->price,
+                'has_discount' => !$item->is_gift && ($unitPrice < $variant->price),
                 'stock' => $variant->stock,
                 'quantity' => $quantity,
-                'subtotal' => $variant->price * $quantity,
+                'subtotal' => $unitPrice * $quantity,
             ];
+        })->filter();
+
+        // 取得適用活動
+        $activePromos = $this->discountService->getCartPromotions($standardItems);
+
+        // 為每個一般商品添加 applicable_promotions 欄位
+        $finalItems = $standardItems->map(function ($item) use ($activePromos) {
+            if (!$item->is_gift) {
+                // 找出適用於此商品的促銷活動
+                $applicablePromotionIds = $activePromos->filter(function ($promo) use ($item) {
+                    // 檢查此促銷是否適用於此商品
+                    if ($promo['scope'] === 'all') return true;
+
+                    if ($promo['scope'] === 'category') {
+                        return in_array($item->category_id, $promo['scope_ids']);
+                    }
+
+                    if ($promo['scope'] === 'tag') {
+                        return !empty(array_intersect($item->tag_ids, $promo['scope_ids']));
+                    }
+
+                    if ($promo['scope'] === 'product') {
+                        return in_array($item->product_id, $promo['scope_ids']);
+                    }
+
+                    return false;
+                })->pluck('id')->toArray();
+
+                $item->applicable_promotions = $applicablePromotionIds;
+            } else {
+                // 為已在購物車的贈品附加額度資訊
+                $promo = $activePromos->firstWhere('id', $item->promotion_id);
+                if ($promo) {
+                    $item->promotion_name = $promo['name'];
+                    $item->gift_quota_info = [
+                        'total' => $promo['gift_quota'],
+                        'used' => $promo['used_quota'],
+                        'unit' => $promo['quota_unit']
+                    ];
+                }
+            }
+
+            return $item;
         });
+
+        return $finalItems->values();
     }
 
-    // 加入購物車
-    public function add($variantId, $quantity)
+    /**
+     * 取得目前套用的全館/滿額優惠
+     */
+    public function getAppliedPromotions()
     {
+        $details = $this->getCartDetails();
+        return $this->discountService->getCartPromotions($details);
+    }
+
+    /**
+     * 取得結帳用的購物車內容 (包含驗證後的贈品)
+     * @param array $selectedGifts 來自 Session 的贈品選擇 ['promo_variant' => qty]
+     */
+    public function getCheckoutCartDetails($selectedGifts = [])
+    {
+        // 1. 取得一般商品 (已經包含 applicable_promotions 等標記)
+        $cartItems = $this->getCartDetails();
+
+        // 2. 取得目前的促銷活動狀態 (這時候 activePromos 裡的 allowance 是根據 cartItems 算好的)
+        $activePromos = $this->discountService->getCartPromotions($cartItems);
+
+        // 3. 如果沒有選贈品，直接回傳
+        if (empty($selectedGifts)) {
+            return $cartItems;
+        }
+
+        $giftItems = collect([]);
+
+        // 將選取的贈品按活動分組: [promoId => [[variantId => qty], ...]]
+        $giftsByPromo = [];
+        foreach ($selectedGifts as $key => $qty) {
+            if ($qty <= 0) continue;
+
+            // key 格式: promoId_variantId
+            $parts = explode('_', $key);
+            if (count($parts) !== 2) continue;
+
+            $promoId = (int)$parts[0];
+            $variantId = (int)$parts[1];
+
+            $giftsByPromo[$promoId][] = [
+                'variant_id' => $variantId,
+                'quantity' => $qty
+            ];
+        }
+
+        // 4. 逐一驗證每個活動的贈品是否合法
+        foreach ($giftsByPromo as $promoId => $gifts) {
+            // 找對應的促銷活動
+            $promoData = $activePromos->firstWhere('id', $promoId);
+
+            // 如果活動已過期、未達門檻(allowance=0)或不存在，直接跳過
+            if (!$promoData || ($promoData['allowance'] ?? 0) <= 0) {
+                continue; 
+            }
+
+            $allowance = (float) $promoData['allowance'];
+            $maxGiftCount = $promoData['max_gift_count']; // 可能為 null
+
+            $currentPromoTotalCost = 0;
+            $currentPromoTotalQty = 0;
+            $validatedGifts = [];
+
+            // // 檢查總額度 (gift_quota 即為符合條件的消費金額)
+            // $totalQuota = $promo['gift_quota'];
+            // $usedWeight = 0;
+            // $currentPromoGifts = [];
+
+            // 取得該活動所有可選贈品資訊 (含 cost)
+            $availableGiftOptions = collect($promoData['gift_options']);
+
+            foreach ($gifts as $giftData) {
+                $variantId = $giftData['variant_id'];
+                $qty = $giftData['quantity'];
+
+                $giftOption = $availableGiftOptions->firstWhere('id', $variantId);
+
+                // 驗證 A: 贈品是否存在於該活動中
+                if (!$giftOption) continue;
+                
+                // 驗證 B: 檢查庫存 (若請求數量 > 庫存，則下修為庫存量)
+                if ($giftOption['stock'] < $qty) {
+                    $qty = $giftOption['stock'];
+                }
+                if ($qty <= 0) continue;
+
+                // 累計成本與數量
+                // 注意：這裡使用新欄位 cost
+                $itemTotalCost = $giftOption['cost'] * $qty;
+                $currentPromoTotalCost += $itemTotalCost;
+                $currentPromoTotalQty += $qty;
+
+                // 暫存有效的贈品
+                $validatedGifts[] = [
+                    'option' => $giftOption,
+                    'quantity' => $qty,
+                    'cost_subtotal' => $itemTotalCost
+                ];
+            }
+
+            // 驗證 C: 總成本是否超過額度 (Allowance)
+            if ($currentPromoTotalCost > $allowance) {
+                // 安全機制：若總成本超過額度，視為不合法請求，忽略此活動所有贈品
+                // (也可以選擇拋出異常，但忽略通常使用者體驗較好，頂多是沒贈品)
+                continue;
+            }
+
+            // 驗證 D: 是否超過總數量上限
+            if (!is_null($maxGiftCount) && $currentPromoTotalQty > $maxGiftCount) {
+                continue;
+            }
+
+            // 全部驗證通過，轉為 Cart Item 格式
+            foreach ($validatedGifts as $item) {
+                $giftOption = $item['option'];
+                $qty = $item['quantity'];
+
+                $giftItems->push((object)[
+                    'cart_item_key' => "gift_{$promoId}_{$giftOption['id']}",
+                    'variant_id' => $giftOption['id'],
+                    'product_id' => 0,  // 贈品可能沒有獨立 product_id 邏輯，或從 option 抓
+                    'product_name' => $giftOption['name'], // 這裡已經是 "產品名 - 規格名"
+                    'variant_name' => '贈品',
+                    'product_slug' => '', // 贈品通常不點擊跳轉
+                    'image' => $giftOption['image'],
+                    'is_gift' => true,
+                    'promotion_id' => $promoId,
+                    'promotion_name' => $promoData['name'],
+                    'price' => 0,
+                    'original_price' => $giftOption['cost'],
+                    'has_discount' => false,
+                    'stock' => $giftOption['stock'],
+                    'quantity' => $qty,
+                    'subtotal' => 0,
+                    'gift_quota_info' => [
+                        'total' => $allowance,
+                        'used' => $currentPromoTotalCost,
+                        'unit' => $promoData['threshold_type'] === 'quantity' ? '件' : 'currency'
+                    ]
+                ]);
+            }
+        }
+
+        return $cartItems->merge($giftItems);
+    }
+
+    // 加入購物車 (只處理一般商品，贈品由前端管理)
+    public function add($variantId, $quantity, $isGift = false, $promotionId = null)
+    {
+        // 贈品不存入購物車，直接返回
+        if ($isGift) {
+            return;
+        }
+
         // 1. 先抓出規格與庫存
-        $variant = ProductVariant::find($variantId);
+        $variant = ProductVariant::with('product')->find($variantId);
         if (!$variant) {
             throw new Exception('商品規格不存在');
         }
 
-        // 2. 取得目前購物車內該商品的數量
-        $currentQtyInCart = 0;
-
-        if (Auth::check()) {
-            // DB 模式
-            $user = Auth::user();
-            $cart = $user->cart; // 可能為 null
-            if ($cart) {
-                $item = $cart->items()->where('product_variant_id', $variantId)->first();
-                if ($item) {
-                    $currentQtyInCart = $item->quantity;
-                }
-            }
-        } else {
-            // Session 模式
-            $sessionCart = Session::get('cart', []);
-            if (isset($sessionCart[$variantId])) {
-                $currentQtyInCart = $sessionCart[$variantId];
-            }
+        if (!$variant->product->is_sellable) {
+            throw new Exception('贈品會在符合條件時自動加入購物車');
         }
 
-        // 3. 檢查總量是否超過庫存
+        // 2. 檢查總量是否超過庫存
+        $currentQtyInCart = $this->quantityOf($variantId, false);
         if (($currentQtyInCart + $quantity) > $variant->stock) {
-            // 計算還能買幾個
             $remaining = max(0, $variant->stock - $currentQtyInCart);
             throw new Exception("庫存不足！目前購物車已有 {$currentQtyInCart} 件，您最多只能再加 {$remaining} 件。");
         }
 
-        // 4. 通過檢查，執行寫入 (邏輯同原本，但移除了重複的宣告)
+        // 3. 執行寫入
         if (Auth::check()) {
+            /** @var \App\Models\User $user */
             $user = Auth::user();
             $cart = $user->cart ?? $user->cart()->create();
 
-            $item = $cart->items()->where('product_variant_id', $variantId)->first();
+            $item = $cart->items()
+                ->where('product_variant_id', $variantId)
+                ->where('is_gift', false)
+                ->first();
+
             if ($item) {
                 $item->increment('quantity', $quantity);
             } else {
                 $cart->items()->create([
                     'product_variant_id' => $variantId,
-                    'quantity' => $quantity
+                    'quantity' => $quantity,
+                    'is_gift' => false,
+                    'promotion_id' => null
                 ]);
             }
         } else {
             $cart = Session::get('cart', []);
+
             if (isset($cart[$variantId])) {
-                $cart[$variantId] += $quantity;
+                $cart[$variantId]['quantity'] += $quantity;
             } else {
-                $cart[$variantId] = $quantity;
+                $cart[$variantId] = [
+                    'quantity' => $quantity,
+                    'is_gift' => false,
+                    'promotion_id' => null
+                ];
             }
             Session::put('cart', $cart);
         }
     }
 
-    // 更新數量
-    public function update($variantId, $quantity)
+    // 更新數量 (只處理一般商品)
+    public function update($variantId, $quantity, $isGift = false, $promotionId = null)
     {
+        // 贈品不處理，直接返回
+        if ($isGift) {
+            return;
+        }
+
         if ($quantity <= 0) {
-            $this->remove($variantId);
+            $this->remove($variantId, false, null);
             return;
         }
 
@@ -170,22 +384,33 @@ class CartService
             if ($user->cart) {
                 $user->cart->items()
                     ->where('product_variant_id', $variantId)
+                    ->where('is_gift', false)
                     ->update(['quantity' => $quantity]);
             }
         } else {
             $cart = Session::get('cart', []);
-            $cart[$variantId] = $quantity;
+            if (isset($cart[$variantId])) {
+                $cart[$variantId]['quantity'] = $quantity;
+            }
             Session::put('cart', $cart);
         }
     }
 
-    // 移除商品
-    public function remove($variantId)
+    // 移除商品 (只處理一般商品)
+    public function remove($variantId, $isGift = false, $promotionId = null)
     {
+        // 贈品不處理，直接返回
+        if ($isGift) {
+            return;
+        }
+
         if (Auth::check()) {
             $user = Auth::user();
             if ($user->cart) {
-                $user->cart->items()->where('product_variant_id', $variantId)->delete();
+                $user->cart->items()
+                    ->where('product_variant_id', $variantId)
+                    ->where('is_gift', false)
+                    ->delete();
             }
         } else {
             $cart = Session::get('cart', []);
@@ -205,55 +430,96 @@ class CartService
     }
 
     // 取得特定規格在購物車目前的數量
-    public function quantityOf($variantId)
+    public function quantityOf($variantId, $isGift = false, $promotionId = null)
     {
         $content = $this->getContent();
-        return $content[$variantId] ?? 0;
+        $target = $content->first(function ($item) use ($variantId, $isGift, $promotionId) {
+            return $item->variant_id == $variantId &&
+                $item->is_gift == $isGift &&
+                $item->promotion_id == $promotionId;
+        });
+        return $target ? $target->quantity : 0;
     }
 
     // 合併購物車 (登入時呼叫)
     public function mergeSessionToDb()
     {
+        // 這裡不能用 $this->getContent()，因為登入後它會抓到 DB 的資料
+        // 我們必須強制抓取 Session 中的原始資料
         $sessionCart = Session::get('cart', []);
 
-        if (empty($sessionCart)) return;
+        // 轉為 Collection 以便操作 (配合原本的邏輯結構)
+        $sessionContent = collect($sessionCart)->map(function ($data, $key) {
+            // 相容舊格式與新格式
+            if (is_array($data)) {
+                $actualVariantId = (str_contains($key, 'gift_')) ? explode('_', $key)[1] : $key;
+                return (object) array_merge(['id' => $key, 'variant_id' => $actualVariantId], $data);
+            }
+            return (object) [
+                'variant_id' => $key,
+                'quantity' => $data,
+                'is_gift' => false,
+                'promotion_id' => null
+            ];
+        });
+        // 這裡如果是未登入，會回傳從 Session 轉出的 Collection
+        if ($sessionContent->isEmpty()) return;
 
+        // 合併購物車
+        /** @var \App\Models\User $user */
         $user = Auth::user();
-        // 確保 User 有購物車
         $dbCart = $user->cart ?? $user->cart()->create();
 
-        foreach ($sessionCart as $variantId => $quantity) {
-            $dbItem = $dbCart->items()->where('product_variant_id', $variantId)->first();
+        foreach ($sessionContent as $item) {
+            if ($item->is_gift ?? false) continue;
+
+            $dbItem = $dbCart->items()
+                ->where('product_variant_id', $item->variant_id)
+                ->where('is_gift', false)
+                ->first();
 
             if ($dbItem) {
-                // 如果 DB 也有，數量相加
-                $dbItem->increment('quantity', $quantity);
+                $dbItem->increment('quantity', $item->quantity);
             } else {
-                // 如果 DB 沒有，新增
                 $dbCart->items()->create([
-                    'product_variant_id' => $variantId,
-                    'quantity' => $quantity
+                    'product_variant_id' => $item->variant_id,
+                    'quantity' => $item->quantity,
+                    'is_gift' => false,
+                    'promotion_id' => null
                 ]);
             }
         }
-
-        // 合併完成，清空 Session
+        // 清空 Session
         Session::forget('cart');
+
+        // 清除快取，確保後續讀取 getContent 時是拿到合併後的最新資料
+        $this->cachedContent = null;
+        $this->cachedVariants = null;
     }
 
     // 取得總數量 (用於 Navbar 顯示)
     public function count()
     {
-        if (Auth::check()) {
-            return Auth::user()->cart?->items->sum('quantity') ?? 0;
-        }
-        return array_sum(Session::get('cart', []));
+        $content = $this->getContent();
+        return $content->sum('quantity');
     }
 
-    // 計算小計 (不含折扣)
+    // 計算小計 (已包含商品層級的直接折扣，但不包含全館滿額折扣與優惠券)
     public function subtotal()
     {
         return (int) $this->getCartDetails()->sum('subtotal');
+    }
+
+    // 計算全館/滿額折扣金額
+    public function promoDiscount()
+    {
+        return $this->getAppliedPromotions()->sum('discount_amount');
+    }
+
+    // 計算全館/滿額折扣金額 (Old name for compatibility)
+    public function promotionDiscountAmount()
+    {
+        return $this->promoDiscount();
     }
 
 
@@ -274,8 +540,8 @@ class CartService
         return $coupon;
     }
 
-    // 計算折扣金額
-    public function discountAmount()
+    // 計算優惠券折扣金額
+    public function couponDiscount()
     {
         $coupon = $this->getCoupon();
         if (!$coupon) return 0;
@@ -291,10 +557,19 @@ class CartService
         return 0;
     }
 
+    // 計算總折扣金額 (優惠券 + 活動)
+    public function discountAmount()
+    {
+        return $this->couponDiscount() + $this->promoDiscount();
+    }
+
     // 計算最終總金額
     public function total()
     {
-        return max(0, $this->subtotal() - $this->discountAmount());
+        $subtotal = $this->subtotal();
+        $totalDiscount = $this->discountAmount();
+
+        return max(0, $subtotal - $totalDiscount);
     }
 
     // 套用優惠券
@@ -326,5 +601,147 @@ class CartService
     public function removeCoupon()
     {
         Session::forget('coupon_code');
+    }
+
+    /**
+     * 檢查特定活動的贈品額度是否超標 (動態計算)
+     */
+    protected function checkQuotaBeforeAdd($promotionId, $variantId, $quantityToAdd)
+    {
+        $promo = Promotion::with('gifts')->find($promotionId);
+        if (!$promo) {
+            throw new Exception("活動不存在");
+        }
+
+        $gift = $promo->gifts->firstWhere('id', $variantId);
+        if (!$gift) {
+            throw new Exception("贈品未加入此活動");
+        }
+
+        $weight = (float) $gift->pivot->gift_weight; // e.g. 1500元/份
+        $additionalUsed = $weight * $quantityToAdd;  // 新增消耗
+
+        // 1. 計算目前已用quota (購物車內此promo的所有贈品)
+        $usedQuota = 0;
+        $content = $this->getContent();
+        foreach ($content->where('promotion_id', $promotionId)->where('is_gift', true) as $item) {
+            $usedGift = $promo->gifts->firstWhere('id', $item->variant_id);
+            $usedWeight = $usedGift ? (float) $usedGift->pivot->gift_weight : 1.0;
+            $usedQuota += $usedWeight * $item->quantity;
+        }
+
+        // 2. 總quota限制
+        $totalQuota = $promo->gift_quota > 0 ? (float) $promo->gift_quota : PHP_FLOAT_MAX;
+
+        // 3. 檢查超標
+        $newTotal = $usedQuota + $additionalUsed;
+        if ($newTotal > $totalQuota) {
+            $over = $newTotal - $totalQuota;
+            $unit = $promo->quota_unit === 'currency' ? '元' : '份';
+            throw new Exception("贈品總額超出限制！超額 {$over} {$unit}");
+        }
+    }
+
+    /**
+     * 清理無效的贈品 (門檻未達、過期、超額)
+     */
+    public function cleanupGifts()
+    {
+        $content = $this->getContent();
+        $gifts = $content->where('is_gift', true);
+        if ($gifts->isEmpty()) return;
+
+        // 獨立計算raw subtotal
+        $rawSubtotal = $this->getRawSubtotal();
+
+        // 2. 僅對每個gift檢查其promo資格 (不全掃)
+        foreach ($gifts as $gift) {
+            $promo = Promotion::find($gift->promotion_id);
+            if (!$promo || !$promo->isValid()) {
+                $this->remove($gift->variant_id, true, $gift->promotion_id);
+                continue;
+            }
+
+            // 3. 檢查門檻 (模擬單promo qualifying subtotal)
+            $mockDetails = collect([$gift]); // 最小mock
+            $qualifyingSubtotal = $promo->getQualifyingSubtotal($content->reject(fn($i) => $i->is_gift)); // 只正常商品
+
+            if ($qualifyingSubtotal < $promo->min_threshold) {
+                $this->remove($gift->variant_id, true, $gift->promotion_id);
+                continue;
+            }
+
+            // 4. 檢查quota超標 (用getCartPromotions quota邏輯)
+            if ($promo->gift_quota > 0) { // gift_quota=0視為無限/禁用
+                $applied = $this->discountService->getCartPromotions($content); // 安全：僅quota用，不嵌套cleanup
+                $promoData = $applied->firstWhere('id', $promo->id);
+                if ($promoData && $promoData['used_quota'] > $promoData['gift_quota']) {
+                    $this->remove($gift->variant_id, true, $gift->promotion_id);
+                }
+            }
+        }
+    }
+
+    /**
+     * 計算純購買商品的小計 (不含贈品)
+     */
+    public function getRawSubtotal()
+    {
+        $content = $this->cachedContent ?? $this->getContent();
+        if ($content->isEmpty()) return 0;
+
+        $variants = $this->cachedVariants ?? ProductVariant::whereIn('id', $content->pluck('variant_id'))
+            ->with(['product'])
+            ->get()
+            ->keyBy('id');
+
+        return $content->sum(function ($item) use ($variants) {
+            if ($item->is_gift) return 0;
+            $v = $variants->get($item->variant_id);
+            if (!$v) return 0;
+            return $this->discountService->getDiscountedPrice($v->product, $v->price) * $item->quantity;
+        });
+    }
+
+    /**
+     * 新增：檢查單promo贈品資格 (獨立，避免循環)
+     */
+    protected function stillEligibleForGift(Promotion $promo, float $subtotal, ?ProductVariant $variant = null)
+    {
+        if ($promo->type !== 'threshold_gift') return false;
+        if ($subtotal < $promo->min_threshold) return false;
+
+        $applied = $this->getAppliedPromotions();
+        $promoData = $applied->firstWhere('id', $promo->id);
+        if (!$promoData || $promoData['gift_quota'] <= 0) {
+            return false;
+        }
+        // quota檢查 (簡化)
+        return $promoData['used_quota'] <= $promoData['gift_quota'];
+    }
+
+
+    /**
+     * 清空購物車中所有的贈品
+     */
+    public function clearAllGifts()
+    {
+        if (Auth::check()) {
+            $cart = Auth::user()->cart;
+            if ($cart) {
+                $cart->items()->where('is_gift', true)->delete();
+            }
+        } else {
+            $cart = Session::get('cart', []);
+            $newCart = [];
+            foreach ($cart as $key => $item) {
+                if (!isset($item['is_gift']) || !$item['is_gift']) {
+                    $newCart[$key] = $item;
+                }
+            }
+            Session::put('cart', $newCart);
+        }
+        $this->cachedContent = null;
+        $this->cachedVariants = null;
     }
 }

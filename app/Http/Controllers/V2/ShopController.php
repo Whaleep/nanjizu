@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\V2;
 
 use App\Http\Controllers\Controller;
+use App\Services\DiscountService;
 use App\Services\ShopService;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -10,10 +11,12 @@ use Inertia\Inertia;
 class ShopController extends Controller
 {
     protected $shopService;
+    protected $discountService;
 
-    public function __construct(ShopService $shopService)
+    public function __construct(ShopService $shopService, DiscountService $discountService)
     {
         $this->shopService = $shopService;
+        $this->discountService = $discountService;
     }
 
     // V2 商店首頁
@@ -21,11 +24,11 @@ class ShopController extends Controller
     {
         $data = $this->shopService->getIndexData($request);
 
-        // V2 的 Shop/Index.vue 統一處理了首頁和搜尋結果，直接把資料全丟過去
         return Inertia::render('Shop/Index', [
             'products' => $data['products'],
             'categories' => $data['categories'],
             'filters' => $data['filters'],
+            'currentPromotion' => $data['currentPromotion'] ?? null,
         ]);
     }
 

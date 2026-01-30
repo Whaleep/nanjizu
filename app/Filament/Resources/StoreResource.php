@@ -38,7 +38,8 @@ class StoreResource extends Resource
                     ->required(),
                 Forms\Components\TextInput::make('opening_hours')
                     ->label('營業時間')
-                    ->placeholder('週一至週日 11:00 - 21:00'),
+                    ->placeholder('週一至週日 11:00 - 21:00')
+                    ->required(),
                 Forms\Components\Textarea::make('map_url')
                     ->label('Google Maps Embed URL')
                     ->columnSpanFull(),

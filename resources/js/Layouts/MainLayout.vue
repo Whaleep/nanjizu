@@ -36,9 +36,9 @@ const currentCartCount = ref(initCartCount());
 
 // === 修改 2: 監聽更新事件 (寫入 localStorage) ===
 const updateCartCount = (event) => {
-    const newCount = event.detail.count;
+    if (!event.detail) return;
+    const newCount = parseInt(event.detail.count || 0);
     currentCartCount.value = newCount;
-    // 同步寫入 localStorage
     localStorage.setItem('cartCount', newCount);
 };
 

@@ -21,7 +21,7 @@ class ProductFactory extends Factory
             'slug' => $this->faker->unique()->slug,
             'description' => $this->faker->paragraph,
             'is_active' => true,
-            'image' => 'https://loremflickr.com/320/240/model?random=' . rand(1, 1000),
+            'image' => 'https://loremflickr.com/320/240/model?lock=' . rand(1, 1000),
         ];
     }
 }

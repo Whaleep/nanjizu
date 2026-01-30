@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use App\Models\Product;
+use App\Services\ShopService;
+use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
 
 class WishlistController extends Controller
@@ -11,10 +13,16 @@ class WishlistController extends Controller
     // 顯示我的收藏頁面
     public function index()
     {
-        $products = auth()->user()->wishlists()
-            ->with('variants') // 為了顯示價格
-            ->latest('wishlists.created_at')
+        $query = Auth::user()->wishlists();
+
+        // 使用 ShopService 的優化邏輯
+        $shopService = app(ShopService::class);
+        $shopService->eagerLoadProductRelations($query);
+
+        $products = $query->latest('wishlists.created_at')
             ->paginate(12);
+
+        $shopService->fixVariantProductRelation($products->getCollection());
 
         return Inertia::render('Dashboard/Wishlist', [
             'products' => $products
@@ -26,7 +34,7 @@ class WishlistController extends Controller
     {
         $request->validate(['product_id' => 'required|exists:products,id']);
 
-        $user = auth()->user();
+        $user = Auth::user();
         $productId = $request->product_id;
 
         // toggle() 是 Laravel 內建的多對多切換方法

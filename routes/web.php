@@ -11,6 +11,7 @@ use App\Http\Controllers\WishlistController;
 use App\Http\Controllers\ReviewController;
 use App\Http\Controllers\OrderTrackingController;
 use App\Http\Controllers\Admin\OrderController as AdminOrderController;
+use App\Http\Controllers\Api\BlockController;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
@@ -76,6 +77,8 @@ Route::prefix('cart')->name('cart.')->group(function () {
     Route::post('/remove', [V2\CartController::class, 'remove'])->name('remove');
     Route::post('/coupon', [V2\CartController::class, 'applyCoupon'])->name('coupon.apply');
     Route::delete('coupon', [V2\CartController::class, 'removeCoupon'])->name('coupon.remove');
+    // 新增：提交贈品並前往結帳
+    Route::post('/checkout', [V2\CartController::class, 'prepareCheckout'])->name('prepare-checkout');
 });
 
 Route::get('/checkout', [V2\CheckoutController::class, 'index'])->name('checkout.index');
@@ -120,55 +123,21 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::get('/debug/line', [\App\Http\Controllers\WebhookController::class, 'debugLine'])->name('debug.line');
 });
 
-// 共用 API 不分版本
-// 綠界金流回調路由
+/*
+|--------------------------------------------------------------------------
+| Shared APIs (共用 API)
+|--------------------------------------------------------------------------
+*/
+// 1. Webhooks / Callbacks (通常不需要 CSRF 保護，需檢查 VerifyCsrfToken middleware)
 Route::post('/payment/callback', [PaymentController::class, 'callback'])->name('payment.callback');
 
-// API: 區塊專用商品列表 (公開)
-Route::get('/api/products/block', function (Illuminate\Http\Request $request) {
-    $query = Product::where('is_active', true)->with('variants');
-
-    if ($request->category_id) {
-        $query->where('shop_category_id', $request->category_id);
-    }
-
-    if ($request->tag_id) {
-        $query->whereHas('tags', function ($q) use ($request) {
-            $q->where('id', $request->tag_id);
-        });
-    }
-
-    return $query->latest()->take($request->limit ?? 8)->get();
-});
-
-// API: 區塊專用文章列表
-Route::get('/api/posts/block', function (Request $request) {
-    $query = Post::where('is_published', true);
-
-    // 篩選類型 (如果有指定且不是 'all')
-    if ($request->type && $request->type !== 'all') {
-        $query->where('category', $request->type);
-    }
-
-    // 取最新 N 筆
-    $limit = $request->limit ?? 3;
-
-    $posts = $query->latest('published_at')
-        ->take($limit)
-        ->get()
-        ->map(function ($post) {
-            // 整理前端需要的欄位 (包含圖片完整網址)
-            return [
-                'id' => $post->id,
-                'title' => $post->title,
-                'slug' => $post->slug,
-                'category' => $post->category,
-                'image_url' => $post->image ? Storage::url($post->image) : null,
-                'date' => $post->published_at ? $post->published_at->format('Y/m/d') : '',
-            ];
-        });
-
-    return response()->json($posts);
+// 2. Frontend Data Blocks (前端區塊資料 API)
+// 商品、文章區塊列表
+Route::prefix('api')->name('api.')->group(function () {
+    Route::controller(BlockController::class)->group(function () {
+        Route::get('/products/block', 'products')->name('products.block');
+        Route::get('/posts/block', 'posts')->name('posts.block');
+    });
 });
 
 /*

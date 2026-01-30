@@ -3,25 +3,25 @@
 namespace App\Filament\Resources;
 
 use App\Filament\Resources\ShopMenuResource\Pages;
-// use App\Filament\Resources\ShopMenuResource\RelationManagers;
 use App\Models\ShopMenu;
 use App\Models\ShopCategory;
 use App\Models\ProductTag;
+use App\Models\Promotion;
 use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
-use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\SoftDeletingScope;
 
 class ShopMenuResource extends Resource
 {
     protected static ?string $model = ShopMenu::class;
     protected static ?string $navigationIcon = 'heroicon-o-bars-3';
     protected static ?string $navigationGroup = '商店管理';
-    protected static ?string $navigationLabel = '商店選單設定';
-    protected static ?int $navigationSort = 0; // 排最前面
+    protected static ?string $navigationLabel = '商店主選單';
+    protected static ?int $navigationSort = 0;
+    protected static ?string $modelLabel = '商店主選單';
+    protected static ?string $pluralModelLabel = '商店主選單';
 
     public static function form(Form $form): Form
     {
@@ -36,12 +36,13 @@ class ShopMenuResource extends Resource
                     ->options([
                         'category' => '商品分類',
                         'tag' => '商品標籤 (群組)',
+                        'promotion' => '特惠活動',
                         'link' => '自訂連結',
                     ])
                     ->required()
                     ->reactive(), // 變動時觸發介面更新
 
-                // 根據類型顯示不同的選擇器
+                // 分類選擇器
                 Forms\Components\Select::make('target_id')
                     ->label('選擇分類')
                     ->options(ShopCategory::whereNull('parent_id')->pluck('name', 'id')) // 只選第一層
@@ -49,12 +50,22 @@ class ShopMenuResource extends Resource
                     ->hidden(fn(Forms\Get $get) => $get('type') !== 'category')
                     ->required(fn(Forms\Get $get) => $get('type') === 'category'),
 
+                // 標籤選擇器
                 Forms\Components\Select::make('target_id')
                     ->label('選擇標籤')
                     ->options(ProductTag::pluck('name', 'id'))
                     ->searchable()
                     ->hidden(fn(Forms\Get $get) => $get('type') !== 'tag')
                     ->required(fn(Forms\Get $get) => $get('type') === 'tag'),
+
+                // 特惠活動選擇器
+                Forms\Components\Select::make('target_id')
+                    ->label('選擇活動')
+                    ->options(Promotion::where('is_active', true)->pluck('name', 'id'))
+                    ->searchable()
+                    ->hidden(fn(Forms\Get $get) => $get('type') !== 'promotion')
+                    ->required(fn(Forms\Get $get) => $get('type') === 'promotion')
+                    ->helperText('連結將導向至活動專屬商品頁'),
 
                 Forms\Components\TextInput::make('url')
                     ->label('輸入網址')
@@ -76,12 +87,14 @@ class ShopMenuResource extends Resource
                     ->formatStateUsing(fn(string $state): string => match ($state) {
                         'category' => '分類',
                         'tag' => '標籤',
+                        'promotion' => '特惠活動',
                         'link' => '連結',
                         default => $state,
                     })
                     ->color(fn(string $state): string => match ($state) {
                         'category' => 'info',
                         'tag' => 'success',
+                        'promotion' => 'warning',
                         'link' => 'gray',
                         default => 'gray',
                     }),

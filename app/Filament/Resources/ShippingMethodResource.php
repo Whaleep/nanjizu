@@ -20,6 +20,8 @@ class ShippingMethodResource extends Resource
     protected static ?string $navigationIcon = 'heroicon-o-truck';
     protected static ?string $navigationGroup = '商店管理';
     protected static ?string $navigationLabel = '運費物流設定';
+    protected static ?string $modelLabel = '運費物流';
+    protected static ?string $pluralModelLabel = '運費物流';
     protected static ?int $navigationSort = 5;
 
     public static function form(Form $form): Form
@@ -41,6 +43,7 @@ class ShippingMethodResource extends Resource
                     ->label('免運門檻')
                     ->numeric()
                     ->prefix('$')
+                    ->placeholder('無免運優惠')
                     ->helperText('訂單金額達到此數值即免運，留空則無免運優惠'),
 
                 Forms\Components\TextInput::make('sort_order')

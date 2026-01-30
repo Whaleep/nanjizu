@@ -22,7 +22,8 @@ class ProductResource extends Resource
     protected static ?string $navigationGroup = '商店管理';
     protected static ?string $navigationLabel = '商品列表';
     protected static ?int $navigationSort = 2;
-
+    protected static ?string $modelLabel = '商品';
+    protected static ?string $pluralModelLabel = '商品';
 
 
     public static function form(Form $form): Form
@@ -87,7 +88,12 @@ class ProductResource extends Resource
                                             ->helperText('簡短說明賣點，例如：送保貼 | 台灣公司貨 | 1年保固'),
 
                                         Forms\Components\Toggle::make('is_active')
-                                            ->label('上架販售')
+                                            ->label('上架狀態')
+                                            ->default(true)
+                                            ->inline(false),
+                                        Forms\Components\Toggle::make('is_sellable')
+                                            ->label('可單獨販售')
+                                            ->helperText('若關閉，則此商品僅能作為贈品贈送')
                                             ->default(true)
                                             ->inline(false),
                                     ])
@@ -499,6 +505,7 @@ class ProductResource extends Resource
                         $replica->name = $replica->name . ' (Copy)';
                         $replica->slug = Str::slug($replica->name . '-' . time()); // 確保唯一性
                         $replica->is_active = false; // 預設下架
+                        $replica->image = null; // 複製時不要帶著圖片，避免更新圖片時誤刪原商品圖片
                     })
                     ->after(function (Product $replica, Product $record) {
                         // 手動複製規格 (Deep Copy Variants)
@@ -508,14 +515,14 @@ class ProductResource extends Resource
                                 'price' => $variant->price,
                                 'stock' => $variant->stock,
                                 'sku' => $variant->sku ? $variant->sku . '-COPY' : null,
-                                'image' => $variant->image, // 共用圖片路徑
+                                'image' => null, // 規格也不要帶著圖片
                                 'attributes' => $variant->attributes,
                             ]);
                         }
 
                         \Filament\Notifications\Notification::make()
                             ->title('商品複製成功')
-                            ->body('已複製商品與所有規格，預設為下架狀態。')
+                            ->body('已複製商品與所有規格，不含圖片，預設為下架狀態。')
                             ->success()
                             ->send();
                     }),

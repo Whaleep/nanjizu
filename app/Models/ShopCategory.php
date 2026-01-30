@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 use App\Traits\HasMediaCollections;
 use Spatie\MediaLibrary\HasMedia;
+use Illuminate\Support\Facades\Log;
 
 class ShopCategory extends Model implements HasMedia
 {
@@ -47,19 +48,56 @@ class ShopCategory extends Model implements HasMedia
         return $this->hasMany(Product::class);
     }
 
-    // 取得所有祖先分類 (包含自己)，回傳一個 Collection
-    public function getAncestorsAttribute()
+    // 取得所有祖先分類 (包含自己)
+    public function getAncestorsAttribute(): array
     {
-        $ancestors = collect([]);
-        $category = $this;
-
-        // 一直往上找 parent，直到沒有為止
-        while ($category) {
-            $ancestors->prepend($category); // 把找到的放最前面
-            $category = $category->parent;
+        // 用於快取已計算的結果，避免重複查詢
+        if (isset($this->attributes['cached_ancestors'])) {
+            return $this->attributes['cached_ancestors'];
         }
-
+        $ancestors = [];
+        $current = $this;
+        $visitedIds = [$this->id]; // 防止循環引用
+        $depth = 0;
+        $maxDepth = 10; // 防止異常深度的分類結構
+        while ($current->parent && $depth < $maxDepth) {
+            $parent = $current->parent;
+            // 安全檢查：防止循環引用
+            if (in_array($parent->id, $visitedIds)) {
+                Log::warning('ShopCategory 循環引用檢測', [
+                    'category_id' => $this->id,
+                    'circular_id' => $parent->id,
+                ]);
+                break;
+            }
+            $visitedIds[] = $parent->id;
+            // 放入陣列開頭，確保順序是「最上層 → 下層」
+            array_unshift($ancestors, [
+                'id' => $parent->id,
+                'name' => $parent->name,
+                'slug' => $parent->slug,
+            ]);
+            $current = $parent;
+            $depth++;
+        }
+        // 可選擇快取結果（適用於多次存取場景）
+        // $this->attributes['cached_ancestors'] = $ancestors;
         return $ancestors;
+    }
+
+        /**
+     * 取得完整麵包屑路徑 Accessor（含自己）
+     * 用途：前端直接使用，省去組裝邏輯
+     */
+    public function getBreadcrumbPathAttribute(): array
+    {
+        $path = $this->ancestors; // 呼叫上面的 accessor
+        $path[] = [
+            'id' => $this->id,
+            'name' => $this->name,
+            'slug' => $this->slug,
+        ];
+        return $path;
     }
 
     // 取得完整路徑名稱，例如: "Apple > iPhone 15 > 電池"

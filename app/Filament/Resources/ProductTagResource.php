@@ -15,13 +15,9 @@ use Illuminate\Support\Str;
 class ProductTagResource extends Resource
 {
     protected static ?string $model = ProductTag::class;
-
     protected static ?string $navigationIcon = 'heroicon-o-hashtag'; // hashtag 圖示
-
     protected static ?string $navigationGroup = '商店管理'; // 歸類在商店管理
-
     protected static ?string $navigationLabel = '商品標籤';
-
     protected static ?int $navigationSort = 3; // 排在商品列表後面
 
     public static function form(Form $form): Form

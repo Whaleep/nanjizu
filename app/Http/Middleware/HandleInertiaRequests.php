@@ -46,10 +46,52 @@ class HandleInertiaRequests extends Middleware
             ],
 
             // 3. 購物車數量 (Session)
-            'cartCount' => array_sum(session('cart', [])),
+            'cartCount' => collect(session('cart', []))->sum(fn($item) => is_array($item) ? ($item['quantity'] ?? 0) : $item),
 
             // 4. 商店選單 (共用導航)
-            'menuItems' => \App\Models\ShopMenu::orderBy('sort_order')->get(),
+            'menuItems' => function () {
+                return \App\Models\ShopMenu::orderBy('sort_order')
+                    ->with(['category.children', 'tag', 'promotion']) 
+                    ->get()
+                    ->map(function ($menu) {
+                        // 1. 生成連結
+                        $link = '#';
+                        if ($menu->type === 'category' && $menu->category) {
+                            $link = route('shop.category', $menu->category->slug);
+                        } elseif ($menu->type === 'tag' && $menu->tag) {
+                            $link = route('shop.index', ['tag' => $menu->tag->slug]);
+                        } elseif ($menu->type === 'promotion') {
+                            $link = '/shop?promotion=' . $menu->target_id;
+                        } elseif ($menu->type === 'link') {
+                            $link = $menu->url;
+                        }
+
+                        // 2. 準備子選單 (針對分類)
+                        $children = [];
+                        if ($menu->type === 'category' && $menu->category) {
+                            $children = $menu->category->children
+                                ->where('is_visible', true)
+                                ->sortBy('sort_order')
+                                ->map(fn($child) => [
+                                    'id' => $child->id,
+                                    'name' => $child->name,
+                                    'link' => route('shop.category', $child->slug),
+                                ])
+                                ->values(); // 重置陣列索引
+                        }
+
+                        // 3. 回傳前端友善的結構
+                        return [
+                            'id' => $menu->id,
+                            'name' => $menu->name,
+                            'type' => $menu->type,
+                            'link' => $link, // 前端直接用這個 href
+                            'children' => $children, // 子選單資料
+                            // 額外標記：是否為活動 (可用於前端加 Badge 或變色)
+                            'is_promotion' => $menu->type === 'promotion', 
+                        ];
+                    });
+            },
 
             // 商店側邊欄分類樹 (V2 Shop Sidebar)
             'shopCategories' => fn() => ShopCategory::whereNull('parent_id')
@@ -65,7 +107,7 @@ class HandleInertiaRequests extends Middleware
                 'success' => fn() => $request->session()->get('success'),
                 'error' => fn() => $request->session()->get('error'),
             ],
-            
+
             'csrf_token' => csrf_token(),
         ]);
     }

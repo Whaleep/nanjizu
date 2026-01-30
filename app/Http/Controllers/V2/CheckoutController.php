@@ -9,6 +9,7 @@ use App\Services\CartService;
 use App\Services\CheckoutService;
 use App\Services\ECPayService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
 
 class CheckoutController extends Controller
@@ -23,25 +24,50 @@ class CheckoutController extends Controller
     // V2 結帳頁面
     public function index()
     {
-        $cartItems = $this->cartService->getCartDetails();
+        // 1. 從 Session 取得選擇的贈品
+        $selectedGifts = session('checkout_selected_gifts', []);
+
+        // 2. 取得合併贈品後的購物車內容
+        $cartItems = $this->cartService->getCheckoutCartDetails($selectedGifts);
 
         // 如果購物車是空的，不進行結帳，導向商店首頁
         if ($cartItems->isEmpty()) {
             return redirect()->route('shop.index');
         }
 
-        // 商品小計 (扣除優惠券後，尚未加運費)
-        $subtotal = $this->cartService->total();
+        // 3. 取得金額資訊
+        // 注意：這裡要小心，CartService 的 subtotal/total 方法通常是讀取資料庫的 cart
+        // 但因為贈品是 $0，所以金額計算不會因為多了贈品而改變，直接呼叫 Service 方法是安全的
+        $subtotal = $this->cartService->subtotal();
+        $promoDiscount = $this->cartService->promoDiscount(); // 滿額/全館折扣金額
+        $couponDiscount = $this->cartService->couponDiscount(); // 優惠券折扣
+        $total = $this->cartService->total(); // 最終金額
 
-        // 取得啟用的運送方式
+        // 4. 取得啟用的運送方式
         $shippingMethods = ShippingMethod::where('is_active', true)
             ->orderBy('sort_order')
             ->get();
 
+        // 5. 取得使用者預設資料 (若有登入)
+        $user = Auth::user();
+        $savedAddress = $user ? [
+            'name' => $user->name,
+            'phone' => $user->phone, // 假設有這個欄位
+            'address' => $user->address, // 假設有這個欄位
+            'email' => $user->email,
+        ] : null;
+
         return Inertia::render('Shop/Checkout', [
-            'cartItems' => $cartItems,
-            'subtotal' => $subtotal,
+            'cartItems' => $cartItems, // 這裡包含了通過驗證的贈品
+            'summary' => [
+                'subtotal' => $subtotal,
+                'promo_discount' => $promoDiscount,
+                'coupon_discount' => $couponDiscount,
+                'total' => $total,
+            ],
             'shippingMethods' => $shippingMethods,
+            'savedAddress' => $savedAddress,
+            'appliedCoupon' => session('coupon_code'), // 讓前端知道有用優惠券
         ]);
     }
 
@@ -58,6 +84,9 @@ class CheckoutController extends Controller
             'notes' => 'nullable',
             'shipping_method_id' => 'required|exists:shipping_methods,id',
         ]);
+
+        // 加入贈品資訊到資料中
+        $validatedData['selected_gifts'] = session('checkout_selected_gifts', []);
 
         try {
             // 2. 呼叫 Service 建立訂單

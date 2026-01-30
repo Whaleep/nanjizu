@@ -33,10 +33,25 @@ const toggleExpand = (id) => {
         <div class="bg-white border-b hidden lg:block shadow-sm top-16 z-40">
             <div class="container mx-auto px-4">
                 <ul class="flex space-x-8 text-sm font-medium">
-                    <li v-for="item in $page.props.menuItems" :key="item.id" class="py-3">
-                        <Link :href="item.link" class="hover:text-blue-600 transition">
+                    <li v-for="item in $page.props.menuItems" :key="item.id" class="py-3 relative group">
+                        
+                        <!-- 主連結 -->
+                        <Link :href="item.link" 
+                              class="transition flex items-center gap-1"
+                              :class="item.is_promotion ? 'text-red-600 hover:text-red-700 font-bold' : 'hover:text-blue-600 text-gray-700'">
+                            <span v-if="item.is_promotion">🔥</span>
                             {{ item.name }}
                         </Link>
+
+                        <!-- 下拉選單 (Desktop Dropdown - 針對有子分類的項目) -->
+                        <div v-if="item.children && item.children.length > 0" 
+                             class="absolute left-0 top-full mt-0 w-48 bg-white border border-gray-100 shadow-lg rounded-lg py-2 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 transform origin-top-left">
+                            <Link v-for="child in item.children" :key="child.id"
+                                  :href="child.link"
+                                  class="block px-4 py-2 text-gray-600 hover:bg-gray-50 hover:text-blue-600">
+                                {{ child.name }}
+                            </Link>
+                        </div>
                     </li>
                 </ul>
             </div>
@@ -106,41 +121,34 @@ const toggleExpand = (id) => {
                 <ul class="p-4 space-y-2">
                     <li v-for="item in menuItems" :key="item.id" class="border-b border-gray-100 last:border-0 pb-2">
 
-                        <!-- 邏輯判斷 (同之前) -->
-                        <!-- 這裡為了簡化 template，建議把這些邏輯封裝成 computed 或 method，但直接寫也行 -->
-                        <!-- 為了閱讀方便，這裡假設 item 已經有 helper 屬性，或是我們在 template 裡處理 -->
-
                         <div class="flex justify-between items-center">
                             <!-- 連結 -->
-                            <Link :href="item.link" class="font-bold text-gray-800 flex-grow py-2 text-base"
+                            <Link :href="item.link" 
+                                  class="flex-grow py-2 text-base flex items-center gap-2"
+                                  :class="item.is_promotion ? 'text-red-600 font-bold' : 'text-gray-800 font-bold'"
                                   @click="mobileSidebarOpen = false">
+                                <span v-if="item.is_promotion">🔥</span>
                                 {{ item.name }}
                             </Link>
 
-                            <!-- 展開箭頭 (只有分類且有子分類時顯示) -->
-                            <!-- 注意：這裡需要判斷 item.type === 'category' 且有 target_id -->
-                            <!-- 為了方便，我們假設後端已經處理好 children 關聯，或者我們直接檢查 -->
-
-                            <button v-if="item.type === 'category'"
+                            <!-- 展開按鈕 (只有當 children 存在且不為空時顯示) -->
+                            <button v-if="item.children && item.children.length > 0"
                                     @click.stop="toggleExpand(item.id)"
-                                    class="p-3 text-gray-500 active:bg-gray-100 rounded-full">
-                                <svg :class="expandedStates[item.id] ? 'rotate-180' : ''" class="w-5 h-5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                                    class="p-3 text-gray-500 active:bg-gray-100 rounded-full transition-transform"
+                                    :class="expandedStates[item.id] ? 'rotate-180 bg-gray-50' : ''">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                             </button>
                         </div>
 
-                        <!-- 子選單 (在此透過 API 或 資料結構取得子分類) -->
-                        <!-- 由於 ShopMenu 結構比較特殊，這裡我們需要一個輔助方法來抓子分類 -->
-                        <!-- 暫時解法：我們假設後端 ShopMenu 模型有 `children` 關聯 (透過 target_id -> ShopCategory -> children) -->
-
-                        <ul v-if="item.type === 'category' && expandedStates[item.id]"
-                            class="pl-4 mt-1 space-y-2 bg-gray-50 rounded-lg p-3">
-
-                            <!-- 這裡需要後端支援：ShopMenu Model 需要關聯到 ShopCategory 的 children -->
-                            <!-- 如果您的 ShopMenu 模型還沒加這個關聯，請看下方的後端補充 -->
-
-                            <li v-for="child in item.category_children" :key="child.id">
-                                <Link :href="`/shop/category/${child.slug}`"
-                                      class="block text-gray-600 text-sm py-1 hover:text-blue-600"
+                        <!-- 子選單 -->
+                        <ul v-if="item.children && item.children.length > 0"
+                            v-show="expandedStates[item.id]"
+                            class="pl-4 mt-1 space-y-1 bg-gray-50 rounded-lg p-2 transition-all">
+                            
+                            <!-- 直接遍歷 children -->
+                            <li v-for="child in item.children" :key="child.id">
+                                <Link :href="child.link"
+                                      class="block text-gray-600 text-sm py-2 px-2 rounded hover:bg-white hover:text-blue-600"
                                       @click="mobileSidebarOpen = false">
                                     {{ child.name }}
                                 </Link>

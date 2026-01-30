@@ -22,6 +22,7 @@ class Product extends Model implements HasMedia
     protected $casts = [
         'description' => 'array',
         'is_active' => 'boolean',
+        'is_sellable' => 'boolean',
         'content' => 'array',
         'options' => 'array',
     ];
@@ -35,7 +36,41 @@ class Product extends Model implements HasMedia
     }
 
     // 自動附加這個虛擬欄位到 JSON
-    protected $appends = ['primary_image', 'images', 'is_wishlisted'];
+    protected $appends = ['primary_image', 'images', 'is_wishlisted', 'price', 'display_price', 'has_discount'];
+
+    /**
+     * 動態取得原始價格 (多規格時回傳最小值)
+     */
+    public function getPriceAttribute()
+    {
+        // 如果沒有預載 variants，直接回傳 0 避免 N+1 (在後台列表時)
+        if (!$this->relationLoaded('variants')) {
+            return 0;
+        }
+        return $this->variants->min('price') ?? 0;
+    }
+
+    /**
+     * 動態取得顯示價格 (計算折扣後)
+     */
+    public function getDisplayPriceAttribute()
+    {
+        if (!$this->relationLoaded('variants')) {
+            return 0;
+        }
+        return app(\App\Services\DiscountService::class)->getDiscountedPrice($this, $this->price);
+    }
+
+    /**
+     * 判斷是否有折扣
+     */
+    public function getHasDiscountAttribute(): bool
+    {
+        if (!$this->relationLoaded('variants')) {
+            return false;
+        }
+        return $this->display_price < $this->price;
+    }
 
     public function registerMediaCollections(): void
     {
@@ -48,28 +83,38 @@ class Product extends Model implements HasMedia
     // 定義 primary_image 邏輯
     public function getPrimaryImageAttribute()
     {
-        // Use Media Library to get the first image
-        return $this->getFirstMediaUrl('product_images', 'thumb');
+        // 嘗試取得 'thumb' 縮圖，如果縮圖不存在 (例如 GIF/SVG 或生成失敗)，回退取用「原圖」
+        if ($this->relationLoaded('media')) {
+            $url = $this->getFirstMediaUrl('product_images', 'thumb');
+            if ($url) return $url;
+
+            $url = $this->getFirstMediaUrl('product_images');
+            if ($url) return $url;
+        }
+        return $this->image; // 回退到欄位值
     }
 
-    // 取得所有圖片的 URL 陣列
     public function getImagesAttribute()
     {
+        if (!$this->relationLoaded('media')) {
+            return [];
+        }
         return $this->getMedia('product_images')->map(function ($media) {
             return $media->getUrl();
         })->toArray();
     }
 
-    // 判斷當前登入使用者是否收藏
     public function getIsWishlistedAttribute(): bool
     {
-        if (!Auth::check()) {
+        if (array_key_exists('is_wishlisted', $this->attributes)) {
+            return (bool) $this->attributes['is_wishlisted'];
+        }
+
+        // 後台請求或是未登入，不進行額外查詢
+        if (request()->is('admin*') || request()->is('filament*') || !Auth::check()) {
             return false;
         }
 
-        // 快取機制：避免在列表渲染時造成過多重複 SQL
-        // 雖然 Laravel 本身有快取，但我們可以在載入時使用 withExists 效能更好
-        // 這裡提供基礎判斷
         return $this->wishlistedBy()->where('user_id', Auth::id())->exists();
     }
 
@@ -104,17 +149,28 @@ class Product extends Model implements HasMedia
     // 取得平均評分 (Attribute)
     public function getAverageRatingAttribute()
     {
+        if (!$this->relationLoaded('reviews')) {
+            return 0;
+        }
         return round($this->reviews()->avg('rating') ?? 0, 1); // 取一位小數
     }
 
     // 取得評價總數
     public function getReviewCountAttribute()
     {
+        if (!$this->relationLoaded('reviews')) {
+            return 0;
+        }
         return $this->reviews()->count();
     }
 
     public function wishlistedBy(): BelongsToMany
     {
         return $this->belongsToMany(User::class, 'wishlists', 'product_id', 'user_id')->withTimestamps();
+    }
+
+    public function promotions(): BelongsToMany
+    {
+        return $this->belongsToMany(Promotion::class, 'promotion_product');
     }
 }
