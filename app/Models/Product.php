@@ -36,7 +36,7 @@ class Product extends Model implements HasMedia
     }
 
     // 自動附加這個虛擬欄位到 JSON
-    protected $appends = ['primary_image', 'images', 'is_wishlisted', 'price', 'display_price', 'has_discount'];
+    protected $appends = ['primary_image', 'images', 'price', 'display_price', 'has_discount'];
 
     /**
      * 動態取得原始價格 (多規格時回傳最小值)

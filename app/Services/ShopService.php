@@ -20,6 +20,22 @@ class ShopService
     {
         $this->discountService = $discountService;
     }
+
+    /**
+     * 取得最上層分類 (使用 once 快取，解決 Middleware 與 Controller 重複查詢問題)
+     */
+    public function getRootCategories()
+    {
+        return once(function () {
+            return ShopCategory::whereNull('parent_id')
+                ->where('is_visible', true)
+                // 預載入 media，避免 appends 屬性觸發 N+1 查詢
+                ->with('media')
+                ->orderBy('sort_order')
+                ->get();
+        });
+    }
+
     /**
      * 取得商店首頁/搜尋頁所需的資料
      */
@@ -87,10 +103,7 @@ class ShopService
         $this->attachPromotionsToProducts($products->getCollection());
 
         // 2. 取得最上層分類 (用於首頁分類列表)
-        $categories = ShopCategory::whereNull('parent_id')
-            ->where('is_visible', true)
-            ->orderBy('sort_order')
-            ->get();
+        $categories = $this->getRootCategories();
 
         return [
             'products' => $products,
@@ -111,9 +124,9 @@ class ShopService
     protected function attachPromotionsToProducts($products)
     {
         // 取得所有活躍活動 (使用 Cache)
-        $promos = Cache::tags(['promotions', 'threshold'])->remember(
-            'active_threshold_promos_' . now()->format('Y-m-d-H'),
-            3600,
+        $promos = Cache::remember(
+            DiscountService::CACHE_KEY_THRESHOLD_PROMOS,
+            86400,
             function () {
                 return Promotion::where('is_active', true)
                     ->whereIn('type', ['threshold_cart', 'threshold_product'])

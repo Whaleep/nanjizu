@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\Cache;
 class DiscountService
 {
     private static $directPromotionsCache = null;
+    const CACHE_KEY_THRESHOLD_PROMOS = 'shop_active_threshold_promotions';
 
     /**
      * Get the final price for a product after applying direct discounts.
@@ -55,10 +56,10 @@ class DiscountService
     {
         $appliedPromotions = collect();
 
-        // 1. Threshold Cart Promotions (Full cart amount)
-        $thresholdPromos = Cache::tags(['promotions', 'threshold'])->remember(
-            'active_threshold_promos_' . now()->format('Y-m-d-H'),
-            3600, // 1小時，依需求調整
+        // 1. 取得所有活躍的購物車條件特惠活動
+        $thresholdPromos = Cache::remember(
+            self::CACHE_KEY_THRESHOLD_PROMOS,
+            86400, // 24小時 (秒)
             function () {
                 return Promotion::where('is_active', true)
                     ->whereIn('type', ['threshold_cart', 'threshold_product'])
@@ -68,7 +69,15 @@ class DiscountService
                     ->where(function ($q) {
                         $q->whereNull('end_at')->orWhere('end_at', '>=', now());
                     })
-                    ->with(['gifts.product.media', 'gifts.product', 'promotionGifts', 'categories', 'productTags'])
+                    ->with([
+                        'gifts.media',
+                        'gifts.product.media',
+                        'gifts.product.productTags',
+                        'gifts.product.category',
+                        'categories',
+                        'productTags',
+                        'products'
+                    ])
                     ->orderBy('priority', 'desc')
                     ->get();
             }
@@ -93,8 +102,8 @@ class DiscountService
             $discountAmount = 0;
             if ($isQualified) {
                 if ($promo->action_type === 'percent') {
-// 如果是打折(percent)，計算基礎必須是「金額」，不能是「件數」
-                    
+                    // 如果是打折(percent)，計算基礎必須是「金額」，不能是「件數」
+
                     $baseForDiscount = 0;
 
                     if ($promo->threshold_type === 'amount') {
@@ -103,7 +112,7 @@ class DiscountService
                     } else { // threshold_type === 'quantity'
                         // ★ 如果門檻是件數，allowance 是「件數」(例如 6)，不能拿來打折
                         // 我們需要重新計算這些符合條件商品的「總金額」
-                        
+
                         // 這裡為了效能，我們可以手動篩選加總，避免再次查詢資料庫
                         $baseForDiscount = $cartDetails->sum(function ($item) use ($promo) {
                             // 排除贈品
@@ -179,11 +188,6 @@ class DiscountService
                 'gift_options' => $giftOptions,
             ]);
         }
-        // TODO: Implement multi-buy logic (e.g., Buy 3 items from Tag X)
-        // $groupedByCategory = $cartDetails->groupBy('category_id');
-        // foreach ($groupedByCategory as $catId => $items) {
-        //     if (count($items) >= $promo->min_quantity) { ... }
-        // }
 
         return $appliedPromotions;
     }
@@ -191,53 +195,54 @@ class DiscountService
     /**
      * 取得單一商品適用的「條件特惠」活動 (用於列表頁顯示標籤)
      */
-    public function getProductPromotions(Product $product)
-    {
-        // 取得所有活躍的滿額/滿件活動 (使用與購物車相同的 Cache)
-        $thresholdPromos = Cache::tags(['promotions', 'threshold'])->remember(
-            'active_threshold_promos_' . now()->format('Y-m-d-H'),
-            3600,
-            function () {
-                // ... (這裡的查詢邏輯與 getCartPromotions 裡的一模一樣，可以直接複製過來，或重構提取共用)
-                return Promotion::where('is_active', true)
-                    ->whereIn('type', ['threshold_cart', 'threshold_product'])
-                    ->where(function ($q) {
-                        $q->whereNull('start_at')->orWhere('start_at', '<=', now());
-                    })
-                    ->where(function ($q) {
-                        $q->whereNull('end_at')->orWhere('end_at', '>=', now());
-                    })
-                    ->with(['categories', 'productTags', 'products']) // 這裡不需要載入贈品，只要範圍判斷
-                    ->orderBy('priority', 'desc')
-                    ->get();
-            }
-        );
+    // public function getProductPromotions(Product $product)
+    // {
+    //     // 取得所有活躍的滿額/滿件活動 (使用與購物車相同的 Cache)
+    //     $thresholdPromos = Cache::tags(['promotions', 'threshold'])->remember(
+    //         'active_threshold_promos_' . now()->format('Y-m-d-H'),
+    //         3600,
+    //         function () {
+    //             // ... (這裡的查詢邏輯與 getCartPromotions 裡的一模一樣，可以直接複製過來，或重構提取共用)
+    //             return Promotion::where('is_active', true)
+    //                 ->whereIn('type', ['threshold_cart', 'threshold_product'])
+    //                 ->where(function ($q) {
+    //                     $q->whereNull('start_at')->orWhere('start_at', '<=', now());
+    //                 })
+    //                 ->where(function ($q) {
+    //                     $q->whereNull('end_at')->orWhere('end_at', '>=', now());
+    //                 })
+    //                 ->with(['categories', 'productTags', 'products']) // 這裡不需要載入贈品，只要範圍判斷
+    //                 ->orderBy('priority', 'desc')
+    //                 ->get();
+    //         }
+    //     );
 
-        $applicablePromos = collect();
+    //     $applicablePromos = collect();
 
-        foreach ($thresholdPromos as $promo) {
-            if ($promo->appliesTo($product)) {
-                $applicablePromos->push([
-                    'id' => $promo->id,
-                    'name' => $promo->name,
-                    'type' => $promo->type,
-                    // 可以多傳一點簡單描述給 Tooltip 用
-                    'description' => $promo->action_type === 'gift' 
-                        ? "滿 " . ($promo->threshold_type==='quantity' ? "{$promo->min_threshold}件" : "\${$promo->min_threshold}") . " 送贈品"
-                        : "滿 " . ($promo->threshold_type==='quantity' ? "{$promo->min_threshold}件" : "\${$promo->min_threshold}") . " 享折扣",
-                ]);
-            }
-        }
+    //     foreach ($thresholdPromos as $promo) {
+    //         if ($promo->appliesTo($product)) {
+    //             $applicablePromos->push([
+    //                 'id' => $promo->id,
+    //                 'name' => $promo->name,
+    //                 'type' => $promo->type,
+    //                 // 可以多傳一點簡單描述給 Tooltip 用
+    //                 'description' => $promo->action_type === 'gift' 
+    //                     ? "滿 " . ($promo->threshold_type==='quantity' ? "{$promo->min_threshold}件" : "\${$promo->min_threshold}") . " 送贈品"
+    //                     : "滿 " . ($promo->threshold_type==='quantity' ? "{$promo->min_threshold}件" : "\${$promo->min_threshold}") . " 享折扣",
+    //             ]);
+    //         }
+    //     }
 
-        return $applicablePromos;
-    }
+    //     return $applicablePromos;
+    // }
 
     /**
      * 清除促銷活動快取 (通常在後台更新活動、或訂單成立後呼叫)
      */
     public function clearCaches()
     {
-        Cache::tags(['promotions'])->flush();
+        // 清除快取、靜態變數
+        Cache::forget(self::CACHE_KEY_THRESHOLD_PROMOS);
         self::$directPromotionsCache = null;
     }
 }

@@ -10,6 +10,7 @@ import ModalBtn from '@/Components/Blocks/ModalBtn.vue';
 import ProductGrid from '@/Components/Blocks/ProductGrid.vue';
 import PostGrid from '@/Components/Blocks/PostGrid.vue';
 import VideoBlock from '@/Components/Blocks/VideoBlock.vue';
+import StoreMap from '@/Components/Blocks/StoreMap.vue';
 
 export default {
     hero: HeroSection,
@@ -24,4 +25,5 @@ export default {
     product_grid: ProductGrid,
     post_grid: PostGrid,
     video: VideoBlock,
+    store_map: StoreMap,
 };

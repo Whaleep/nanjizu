@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\Product;
 use App\Models\Post;
+use App\Models\Store;
 use Illuminate\Support\Facades\Storage;
 
 class BlockController extends Controller
@@ -59,5 +60,35 @@ class BlockController extends Controller
             });
 
         return response()->json($posts);
+    }
+    
+    /**
+     * 取得服務據點區塊列表
+     */
+    public function stores(Request $request)
+    {
+        // 基本查詢：只撈啟用的
+        $query = Store::where('is_active', true);
+
+        // 處理數量限制 (如果有傳 limit 且大於 0)
+        if ($request->filled('limit') && $request->limit > 0) {
+            $query->take($request->limit);
+        }
+
+        // 排序建議 (可依據需求改為 sort_order 或 id)
+        $stores = $query->orderBy('id', 'asc') // 或 orderBy('sort_order')
+            ->get()
+            ->map(function ($store) {
+                return [
+                    'id' => $store->id,
+                    'name' => $store->name,
+                    'address' => $store->address,
+                    'phone' => $store->phone,
+                    'opening_hours' => $store->opening_hours,
+                    'map_url' => $store->map_url,
+                ];
+            });
+
+        return response()->json($stores);
     }
 }

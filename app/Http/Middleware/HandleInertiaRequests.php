@@ -3,6 +3,7 @@
 namespace App\Http\Middleware;
 
 use Illuminate\Http\Request;
+use App\Models\ShopMenu;
 use App\Models\ShopCategory;
 use Inertia\Middleware;
 
@@ -50,8 +51,8 @@ class HandleInertiaRequests extends Middleware
 
             // 4. 商店選單 (共用導航)
             'menuItems' => function () {
-                return \App\Models\ShopMenu::orderBy('sort_order')
-                    ->with(['category.children', 'tag', 'promotion']) 
+                return ShopMenu::orderBy('sort_order')
+                    ->with(['category.media', 'category.children', 'tag', 'promotion']) 
                     ->get()
                     ->map(function ($menu) {
                         // 1. 生成連結
@@ -94,13 +95,17 @@ class HandleInertiaRequests extends Middleware
             },
 
             // 商店側邊欄分類樹 (V2 Shop Sidebar)
-            'shopCategories' => fn() => ShopCategory::whereNull('parent_id')
-                ->where('is_visible', true)
-                ->with(['children' => function ($q) {
-                    $q->where('is_visible', true)->orderBy('sort_order');
-                }])
-                ->orderBy('sort_order')
-                ->get(),
+            'shopCategories' => function () {
+                return ShopCategory::whereNull('parent_id')
+                    ->where('is_visible', true)
+                    ->with(['media', 'children' => function ($q) {
+                        $q->where('is_visible', true)
+                          ->orderBy('sort_order')
+                          ->with('media'); 
+                    }])
+                    ->orderBy('sort_order')
+                    ->get();
+            },
 
             // 5. Flash 訊息 (操作成功/失敗提示)
             'flash' => [

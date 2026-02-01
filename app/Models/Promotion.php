@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use App\Services\DiscountService;
 
 class Promotion extends Model
 {
@@ -14,6 +15,18 @@ class Promotion extends Model
     protected $guarded = [];
 
     private static $productTagsCache = [];
+
+    // 新增、編輯、刪除特惠時自動清除快取
+    protected static function booted(): void
+    {
+        static::saved(function ($promotion) {
+            app(DiscountService::class)->clearCaches();
+        });
+
+        static::deleted(function ($promotion) {
+            app(DiscountService::class)->clearCaches();
+        });
+    }
 
     protected $casts = [
         'start_at' => 'datetime',

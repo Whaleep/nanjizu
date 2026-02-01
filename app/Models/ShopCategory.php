@@ -27,7 +27,11 @@ class ShopCategory extends Model implements HasMedia
 
     public function getCategoryIconUrlAttribute()
     {
-        return $this->getFirstMediaUrl('category_icon');
+        if ($this->relationLoaded('media')) {
+            return $this->getFirstMediaUrl('category_icon');
+        }
+        // return $this->getFirstMediaUrl('category_icon');
+        return null;
     }
 
     // 父分類
@@ -85,7 +89,7 @@ class ShopCategory extends Model implements HasMedia
         return $ancestors;
     }
 
-        /**
+    /**
      * 取得完整麵包屑路徑 Accessor（含自己）
      * 用途：前端直接使用，省去組裝邏輯
      */
@@ -104,7 +108,10 @@ class ShopCategory extends Model implements HasMedia
     public function getFullNameAttribute()
     {
         // 如果想要效能好一點，可以只抓 parent->name，但為了完整性，我們用剛剛寫的 ancestors
-        return $this->ancestors->pluck('name')->join(' > ');
+        return collect($this->ancestors)->pluck('name')->join(' > ');
+
+        // 或者用純 PHP 寫法也可以：
+        // return implode(' > ', array_column($this->ancestors, 'name'));
     }
 
     // 取得自己以及所有子孫分類的 ID 陣列

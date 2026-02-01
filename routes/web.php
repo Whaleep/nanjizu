@@ -137,6 +137,7 @@ Route::prefix('api')->name('api.')->group(function () {
     Route::controller(BlockController::class)->group(function () {
         Route::get('/products/block', 'products')->name('products.block');
         Route::get('/posts/block', 'posts')->name('posts.block');
+        Route::get('/stores/block', 'stores')->name('stores.block');
     });
 });
 

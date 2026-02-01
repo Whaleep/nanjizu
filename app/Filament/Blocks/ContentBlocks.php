@@ -270,6 +270,29 @@ class ContentBlocks
                     TextInput::make('heading')
                         ->label('區塊標題 (選填)'),
                 ]),
+
+            // [服務據點地圖]
+            Block::make('store_map')
+                ->label('服務據點地圖 (Google Maps)')
+                ->schema([
+                    TextInput::make('heading')
+                        ->label('區塊標題')
+                        ->default('服務據點'),
+
+                    TextInput::make('limit')
+                        ->label('顯示數量')
+                        ->numeric()
+                        ->placeholder('例如：4')
+                        ->helperText('留空則顯示全部據點'),
+
+                    Select::make('bg_color')
+                        ->label('背景顏色')
+                        ->options([
+                            'white' => '白色',
+                            'gray'  => '淺灰 (Gray-100)',
+                        ])
+                        ->default('white'),
+                ]),
         ];
     }
 }

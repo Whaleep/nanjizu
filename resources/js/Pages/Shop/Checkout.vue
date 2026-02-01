@@ -69,7 +69,7 @@ const submit = () => {
     <MainLayout>
         <div class="container mx-auto px-4 py-12">
 
-            <!-- 新增：訪客警語 -->
+            <!-- 訪客警語 -->
             <div v-if="!$page.props.auth.user" class="max-w-4xl mx-auto mb-8 bg-orange-50 border-l-4 border-orange-500 p-4 rounded-r shadow-sm">
                 <div class="flex">
                     <div class="flex-shrink-0">

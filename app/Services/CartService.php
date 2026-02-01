@@ -16,6 +16,8 @@ class CartService
     protected $discountService;
     private $cachedVariants;
     private $cachedContent;
+    private $memoizedCartDetails = null;    // 暫存「計算完成」的詳細購物車資料
+    private $memoizedPromotions = null;     // 暫存「計算完成」的優惠活動
 
     public function __construct(DiscountService $discountService)
     {
@@ -60,19 +62,41 @@ class CartService
     // 取得購物車內容 (結合資料庫最新資訊)
     public function getCartDetails()
     {
-        // 先清理贈品 (僅一次)
-        $this->cleanupGifts();
-
-        $content = $this->getContent();
-        if ($content->isEmpty()) {
-            return collect([]);
+        // 如果已經算過了，直接回傳，阻斷後續 90% 的重複查詢
+        if ($this->memoizedCartDetails !== null) {
+            return $this->memoizedCartDetails;
         }
 
-        // 從資料庫撈取規格與商品資訊 (一次拿齊)
-        $this->cachedVariants = ProductVariant::with(['product.media', 'product.productTags', 'media'])
-            ->whereIn('id', $content->pluck('variant_id'))
-            ->get()
-            ->keyBy('id');
+        // 先清理贈品 (僅一次)
+        $this->cleanupGifts();
+        $content = $this->getContent();
+        if ($content->isEmpty()) {
+            $this->memoizedPromotions = collect([]);     // 空車時活動也為空
+            return $this->memoizedCartDetails = collect([]);
+        }
+
+        // 從資料庫撈取規格與商品資訊
+        $query = ProductVariant::with([
+            'media',
+            'product.media',
+            'product.productTags', // 這裡原本有，很好
+            'product.category',    // ★ 建議補上：避免 appliesTo 檢查分類時觸發查詢
+        ])
+        ->whereIn('id', $content->pluck('variant_id'));
+
+        // ★ 處理 is_wishlisted 的 N+1
+        // 如果 Product Model 有 append 'is_wishlisted'，這裡必須預載，不然每一行都會查一次 DB
+        if (Auth::check()) {
+            $query->with(['product' => function ($q) {
+                // 這裡利用巢狀預載入，同時載入 product 的關聯與 wishlistedBy
+                $q->with(['media', 'productTags', 'category'])
+                  ->withExists(['wishlistedBy as is_wishlisted' => function ($subQ) {
+                      $subQ->where('user_id', Auth::id());
+                  }]);
+            }]);
+        }
+
+        $this->cachedVariants = $query->get()->keyBy('id');
 
         $standardItems = $content->map(function ($item) {
             $variant = $this->cachedVariants->get($item->variant_id);
@@ -104,10 +128,12 @@ class CartService
         })->filter();
 
         // 取得適用活動
-        $activePromos = $this->discountService->getCartPromotions($standardItems);
+        $this->memoizedPromotions = $this->discountService->getCartPromotions($standardItems);
 
         // 為每個一般商品添加 applicable_promotions 欄位
-        $finalItems = $standardItems->map(function ($item) use ($activePromos) {
+        $finalItems = $standardItems->map(function ($item) {
+            $activePromos = $this->memoizedPromotions;
+
             if (!$item->is_gift) {
                 // 找出適用於此商品的促銷活動
                 $applicablePromotionIds = $activePromos->filter(function ($promo) use ($item) {
@@ -146,7 +172,8 @@ class CartService
             return $item;
         });
 
-        return $finalItems->values();
+        // 將結果存入暫存變數，再回傳
+        return $this->memoizedCartDetails = $finalItems->values();
     }
 
     /**
@@ -154,8 +181,13 @@ class CartService
      */
     public function getAppliedPromotions()
     {
-        $details = $this->getCartDetails();
-        return $this->discountService->getCartPromotions($details);
+        // 如果還沒計算過詳細內容，先跑一次 getCartDetails
+        // getCartDetails 執行後會自動填入 $this->memoizedPromotions
+        if ($this->memoizedPromotions === null) {
+            $this->getCartDetails();
+        }
+        
+        return $this->memoizedPromotions;
     }
 
     /**
@@ -168,7 +200,7 @@ class CartService
         $cartItems = $this->getCartDetails();
 
         // 2. 取得目前的促銷活動狀態 (這時候 activePromos 裡的 allowance 是根據 cartItems 算好的)
-        $activePromos = $this->discountService->getCartPromotions($cartItems);
+        $activePromos = $this->getAppliedPromotions();
 
         // 3. 如果沒有選贈品，直接回傳
         if (empty($selectedGifts)) {
@@ -295,9 +327,17 @@ class CartService
         return $cartItems->merge($giftItems);
     }
 
+    // 清除所有暫存
+    private function resetMemoization()
+    {
+        $this->memoizedCartDetails = null;
+        $this->memoizedPromotions = null;
+    }
+
     // 加入購物車 (只處理一般商品，贈品由前端管理)
     public function add($variantId, $quantity, $isGift = false, $promotionId = null)
     {
+        $this->resetMemoization();
         // 贈品不存入購物車，直接返回
         if ($isGift) {
             return;
@@ -360,6 +400,7 @@ class CartService
     // 更新數量 (只處理一般商品)
     public function update($variantId, $quantity, $isGift = false, $promotionId = null)
     {
+        $this->resetMemoization();
         // 贈品不處理，直接返回
         if ($isGift) {
             return;
@@ -399,6 +440,7 @@ class CartService
     // 移除商品 (只處理一般商品)
     public function remove($variantId, $isGift = false, $promotionId = null)
     {
+        $this->resetMemoization();
         // 贈品不處理，直接返回
         if ($isGift) {
             return;
@@ -444,6 +486,7 @@ class CartService
     // 合併購物車 (登入時呼叫)
     public function mergeSessionToDb()
     {
+        $this->resetMemoization();
         // 這裡不能用 $this->getContent()，因為登入後它會抓到 DB 的資料
         // 我們必須強制抓取 Session 中的原始資料
         $sessionCart = Session::get('cart', []);
@@ -575,16 +618,8 @@ class CartService
     // 套用優惠券
     public function applyCoupon($code)
     {
+        $this->resetMemoization();
         $coupon = Coupon::where('code', $code)->first();
-
-        // --- Debug Start ---
-        // dd([
-        //    'coupon' => $coupon,
-        //    'now' => now(),
-        //    'subtotal' => $this->subtotal(),
-        //    'isValid' => $coupon ? $coupon->isValid($this->subtotal()) : 'no coupon'
-        // ]);
-        // --- Debug End ---
 
         if (!$coupon) {
             throw new \Exception('優惠碼不存在');
@@ -726,6 +761,8 @@ class CartService
      */
     public function clearAllGifts()
     {
+        $this->resetMemoization();
+
         if (Auth::check()) {
             $cart = Auth::user()->cart;
             if ($cart) {
